@@ -1,0 +1,17 @@
+[Unit]
+Description=Add DNS entry in dnsmasq for NetworkManager
+
+After=docker.service
+Requires=docker.service
+
+After=NetworkManager.service
+Requires=NetworkManager.service    
+ 
+[Service]
+Type=simple
+EnvironmentFile=-/etc/docker/docker-dns.conf
+ExecStart=/usr/bin/python3 INSTALL_PATH/docker-dns.py
+Restart=on-failure
+ 
+[Install]
+WantedBy=multi-user.target
