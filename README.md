@@ -1,19 +1,19 @@
 # Docker container DNS entry with NetworkManager and dnsmasq
 
-This is a simple service that will add DNS entry for containers. It create a file in your NetworkManager configuration and manipulate the content when docker start or stop containers.
+This is a simple service that will add DNS entries corresponding to your containers hostnames. 
+It creates a file in your NetworkManager configuration and manipulate the content when docker start or stop containers.
 
-And to make it great, it also make containers able to hit that dns entries, whatever the "network" it is running.
+And to make it great, it also makes containers able to hit that DNS entries internally, whatever the "network" it is running.
 
-Note: filtering ".docker" domain (or any others you've configured, see last section) is a wanted behavior. It's not useful to make domains with "name.docker" for containers we don't want to serve with domain name. So, you only need to add "hostname" option (or "hotname" in docker-compose files) to allow the container to have a **local** domain name. Future versions can change to use option to choose the behavior.
+Note: filtering ".docker" domains (or any others you've configured, see last section) is a wanted behavior. It's useless to resolve the entire docker containers names. So, you only need to add "hostname" option (or "hotname" in docker-compose files) to allow the containers to have a **local** domain name. Future versions can change to use option to choose the behavior.
 
-To make it working, you need to configure NetworkManager to use dnsmasq and add a special configuration to let it listen docker interface.
-
+To make it working, you need to configure NetworkManager to use dnsmasq and add a special configuration to let it listening docker interface. And afterward, you may install our docker-dns service.
 
 ## Requirements
 
 - You need to configure NetworkManager to use dnsmasq (see next section)
 - You need Python3
-- A Linux distribution that uses Systemd
+- A Linux distribution using Systemd
 - You need "docker" python SDK - this is a standard package, please use your distribution package manager to install "python3-docker"
     ```
     # fedora
@@ -26,7 +26,6 @@ To make it working, you need to configure NetworkManager to use dnsmasq and add 
 
 ## NetworkManager configuration
 
-
 Open `/etc/NetworkManager/NetworkManager.conf` file and add dns option in the `[main]` section:
 
 ```ini
@@ -35,13 +34,15 @@ Open `/etc/NetworkManager/NetworkManager.conf` file and add dns option in the `[
 dns=dnsmasq
 ```
 
-That enable dnsmasq resolution. Now, restart NetworkManager and make some checks:
+That enables dnsmasq resolution with NetworkManager. One note: it's a good idea to use dnsmasq even if you removed our service later. Dnsmasq is a really nice service.
+
+Now, restart NetworkManager and make some checks:
 
 ```bash
 $ sudo systemctl restart NetworkManager
-# check if 127.0.0.1 is responding
 
-# ping with ipv4 on google server
+# check if 127.0.0.1 is responding
+# eg. ping with ipv4 on google server
 # and check if it's ok
 $ ping -4 -c1 google.com
 
@@ -49,6 +50,8 @@ $ ping -4 -c1 google.com
 $ dig google.com | grep SERVER
 ;; SERVER: 127.0.0.1#53(127.0.0.1)
 ```
+
+That doesn't work ? you want to abandon ? Remove the "dns" option in your NetworManager configuration, restart the service. But you will not be able to make our docker-dns service working.
 
 ## Make Docker interface using dnsmasq
 
@@ -60,10 +63,11 @@ Open `/etc/NetworkManager/dnsmasq.d/docker-bridge` file (create it) and put the 
 listen-address=172.17.0.1
 ```
 
-**Of course, change it with your own `docker0` ip address.**
+**Of course, replace 172.17.0.1 by your own `docker0` ip address.**
 You can have that ip address with the following command: `ip a show docker0`
 
-Docker is not ready, it should now know that the DNS server is dnsmasq that is binding docker0 interface, Simply add dns entry in `/etc/docker/daemon.json` (create the file if it doesn't exist):
+Then, we need to tell Docker to use that interface as DNS server. 
+Simply add dns entry in `/etc/docker/daemon.json` (create the file if it doesn't exist):
 
 ```json
 {
@@ -82,7 +86,7 @@ systemctl restart docker
 
 **Firewall changes can be needed**
 
-Now, the problem is that you may need to add some rule in firewall to allow incoming connection on DNS service for docker0 interface. 
+Now, it's possible that you may need to add some rules in your firewall configuration to allow incoming connection on DNS service for docker0 interface. 
 If you're using firewalld (CentOS, Fedora...), there are several possibilities.
 
 **You want to make it securly** - use your "internal" zone, append docker0 inside, and allow dns service
@@ -112,8 +116,8 @@ sudo iptables -A INPUT -p tcp -m tcp --dport=53 -i docker -j ACCEPT
 Now, it's time to check if Docker is able to resolve domains with our configuration.
 
 ```bash
-# first, check if docker is configuring
-# resolution correctly
+# first, check if docker is correctly configuring
+# DNS server for resolution 
 $ docker run --rm alpine cat /etc/resolv.conf
 nameserver 172.17.0.1
 
@@ -123,7 +127,7 @@ nameserver 172.17.0.1
 $ docker run --rm alpine ping -c1 www.google.com
 ```
 
-That fine.
+That's fine.
 
 
 ## Finally Install the service
@@ -132,8 +136,8 @@ That fine.
 
 Clone that repository, and then:
 
-```
-make install activate
+```bash
+sudo make install activate
 ```
 
 What does the Makefile is:
@@ -165,10 +169,35 @@ If everything is OK for you, congrats !
 
 ## Configuration
 
-At this time, the service only create DNS entry for ".docker" domain, you can change that using Environment file that you can put at `/etc/docker/docker-dns.conf` containing:
+At this time, the service only create DNS entry for ".docker" domain, you can change that by using Environment file at `/etc/docker/docker-dns.conf` (create it) containing:
 
 ```
 DOCKER_DOMAIN=.other.domain
 ```
 
+Note: yes, you must put a dot as first letter.
+
 Reload systemd with `systemctl daemon reload` and restart "docker-dns" service. That's all !
+
+
+## Uninstall
+
+You can remove the service with:
+
+```bash
+sudo make uninstall
+```
+
+It removes the python script and service. Also, the service is disabled before to be removed. Take a look on the Makefile, it's not so complicated.
+
+
+## Future
+
+There are several things I want to do, if you want to help, you're welcome:
+
+- [ ] Journalctl is not showing my logs... why ?
+- [ ] Check for docker events is not "sure", I probably missed good practices
+- [ ] Wizzard to configure NetworkManager, docker and the service
+- [ ] Give me ideas...
+
+
