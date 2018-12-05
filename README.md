@@ -12,7 +12,7 @@ docker run --hostname="webapp.docker" nginx:alpine
 
 And to make it great, it also makes containers able to hit that DNS entries internally, whatever the "network" it is running.
 
-Note: filtering ".docker" domains (or any others you've configured, see last section) is a wanted behavior. It's useless to resolve the entire docker containers names. So, you only need to add "hostname" option (or "hotname" in docker-compose files) to allow the containers to have a **local** domain name. Future versions can change to use option to choose the behavior.
+Note: filtering ".docker" domains (or any others you've configured, see last section) is a wanted behavior. It's useless to resolve the entire docker containers names. So, you only need to add "hostname" option (or "hostname" in docker-compose files) to allow the containers to have a **local** domain name. Future versions can change to use option to choose the behavior.
 
 To make it working, you need to configure NetworkManager to use dnsmasq and add a special configuration to let it listening docker interface. And afterward, you may install our docker-dns service.
 
