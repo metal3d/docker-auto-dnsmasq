@@ -107,6 +107,24 @@ sudo iptables -A INPUT -p udp -m udp --dport=53 -i docker -j ACCEPT
 sudo iptables -A INPUT -p tcp -m tcp --dport=53 -i docker -j ACCEPT
 ```
 
+## Test Docker with dnsmasq
+
+Now, it's time to check if Docker is able to resolve domains with our configuration.
+
+```bash
+# first, check if docker is configuring
+# resolution correctly
+$ docker run --rm alpine cat /etc/resolv.conf
+nameserver 172.17.0.1
+
+## RIGHT !
+
+# Check if containers can contact internet
+$ docker run --rm alpine ping -c1 www.google.com
+```
+
+That fine.
+
 
 ## Finally Install the service
 
@@ -130,17 +148,14 @@ What does the Makefile is:
 Now, you should be able to make tests:
 
 ```bash
-# check if containers can contact internet
-$ docker run --rm alpine ping -c1 www.google.com
-
 # create a container with hostname
-docker run --rm -d --name test_dns --hostname="web1.docker" nginx:alpine
+$ docker run --rm -d --name test_dns --hostname="web1.docker" nginx:alpine
 
 # you can now navigate to web1.docker
 
 # remove the container
-docker stop test_dns
-docker rm test_dns
+$ docker stop test_dns
+$ docker rm test_dns
 
 # now, web1.docker should not be resolved
 ```
