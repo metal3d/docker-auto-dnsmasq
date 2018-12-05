@@ -202,6 +202,7 @@ It removes the python script and service. Also, the service is disabled before t
 
 There are several things I want to do, if you want to help, you're welcome:
 
+- [ ] Avoid reloading NetworkManager to refresh DNS entries, but how ?
 - [ ] Journalctl is not showing my logs... why ?
 - [ ] Check for docker events is not "sure", I probably missed good practices
 - [ ] Wizzard to configure NetworkManager, docker and the service
