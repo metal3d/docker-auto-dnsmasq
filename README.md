@@ -3,6 +3,13 @@
 This is a simple service that will add DNS entries corresponding to your containers hostnames. 
 It creates a file in your NetworkManager configuration and manipulate the content when docker start or stop containers.
 
+TL;DR It create DNS entries to contact your containers:
+```
+docker run --hostname="webapp.docker" nginx:alpine
+
+# Then go to http://webapp.docker and voilà !
+```
+
 And to make it great, it also makes containers able to hit that DNS entries internally, whatever the "network" it is running.
 
 Note: filtering ".docker" domains (or any others you've configured, see last section) is a wanted behavior. It's useless to resolve the entire docker containers names. So, you only need to add "hostname" option (or "hotname" in docker-compose files) to allow the containers to have a **local** domain name. Future versions can change to use option to choose the behavior.
