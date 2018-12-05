@@ -107,13 +107,10 @@ sudo iptables -A INPUT -p udp -m udp --dport=53 -i docker -j ACCEPT
 sudo iptables -A INPUT -p tcp -m tcp --dport=53 -i docker -j ACCEPT
 ```
 
-## Configure docker
 
+## Finally Install the service
 
-One more time, change it using the correct docker0 ip address.
-
-
-## Install the service
+**Do that only if previous configuration is OK**, if not, retry...
 
 Clone that repository, and then:
 
