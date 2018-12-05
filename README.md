@@ -2,6 +2,10 @@
 
 This is a simple service that will add DNS entry for containers. It create a file in your NetworkManager configuration and manipulate the content when docker start or stop containers.
 
+And to make it great, it also make containers able to hit that dns entries, whatever the "network" it is running.
+
+Note: filtering ".docker" domain (or any others you've configured, see last section) is a wanted behavior. It's not useful to make domains with "name.docker" for containers we don't want to serve with domain name. So, you only need to add "hostname" option (or "hotname" in docker-compose files) to allow the container to have a **local** domain name. Future versions can change to use option to choose the behavior.
+
 To make it working, you need to configure NetworkManager to use dnsmasq and add a special configuration to let it listen docker interface.
 
 ## NetworkManager configuration
