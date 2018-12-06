@@ -3,7 +3,10 @@ INSTALL_PATH=$(PREFIX)/local/libexec
 SERVICENAME=docker-dns
 DOMAINS=.docker
 USE_DNSMASQ_IN_DOCKER=false
+RESOLVE_NAME=true
 PY=python3
+DOCKER_IFACE=docker0
+DOCKER_CIDR=172.0.0.1/8
 
 # install all
 install: configure-networkmanager configure-docker install-service
@@ -27,6 +30,7 @@ uninstall-service:
 install-service:
 	mkdir -p $(INSTALL_PATH)
 	echo 'DOCKER_DOMAIN=$(DOMAINS)' > /etc/docker/docker-dns.conf
+	echo 'DOCKER_RESOLVE_NAME=$(RESOLVE_NAME)' >> /etc/docker/docker-dns.conf
 	cp docker-dnsmasq.service /etc/systemd/system/$(SERVICENAME).service
 	sed -i 's,INSTALL_PATH,$(INSTALL_PATH),' /etc/systemd/system/$(SERVICENAME).service
 	cp docker-dns.py $(INSTALL_PATH)
@@ -34,7 +38,7 @@ install-service:
 # reload service
 activate: reload
 	systemctl enable $(SERVICENAME)
-	systemctl start $(SERVICENAME)
+	systemctl restart $(SERVICENAME)
 	systemctl status $(SERVICENAME)
 
 # configure docker to have dnsmasq dns
@@ -64,6 +68,31 @@ configure-networkmanager:
 uninstall-networkmanager-configuration:
 	rm -f /etc/NetworkManager/conf.d/dnsmasq.conf
 	@$(MAKE) restart-nm
+
+
+install-firewall-rules:
+	[ $$(firewall-cmd --state) == "running" ] && $(MAKE) _firewall-config
+
+uninstall-firewall-rules:
+	[ $$(firewall-cmd --state) == "running" ] && $(MAKE) _firewall-uninstall
+
+
+#### Firewalld
+
+_firewall-config:
+	firewall-cmd --permanent --new-zone=docker
+	firewall-cmd --permanent --zone=docker --add-interface=$(DOCKER_IFACE)
+	firewall-cmd --permanent --zone=docker --add-source=$(DOCKER_CIDR)
+	firewall-cmd --permanent --zone=docker --add-service=dns
+	firewall-cmd --reload
+
+_firewall-uninstall:
+	firewall-cmd --permanent --remove-interface=$(DOCKER_IFACE) --zone=docker
+	firewall-cmd --permanent --remove-source=$(DOCKER_CIDR) --zone=docker
+	firewall-cmd --permanent --remove-service=dns --zone=docker
+	firewall-cmd --permanent --delete-zone=docker
+	firewall-cmd --reload
+
 
 #### restart service
 

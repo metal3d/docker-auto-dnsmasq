@@ -1,5 +1,5 @@
 [Unit]
-Description=Add DNS entry in dnsmasq for NetworkManager
+Description=Docker containers DNS entries in dnsmasq for NetworkManager
 
 After=docker.service
 Requires=docker.service

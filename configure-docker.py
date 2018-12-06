@@ -8,6 +8,8 @@ INTERFACE = 'docker0'
 DAEMONFILE = '/etc/docker/daemon.json'
 NM_DOCKER_CONFIG = '/etc/NetworkManager/dnsmasq.d/docker-bridge'
 
+CIDR = os.environ.get('CIDR', '172.0.0.0/8')
+
 # find docker0 ip
 ipa = subprocess.run(['ip', 'a', 'show', INTERFACE], stdout=subprocess.PIPE)
 ipa = ipa.stdout.decode()
@@ -60,7 +62,7 @@ else:
         conf = 'listen-address=%s' % ipa
         nm.write(conf)
 
-# replace dns and save the file
+# replace dns list
 if len(dns) > 0:
     daemon['dns'] = dns
 else:
