@@ -92,9 +92,8 @@ sudo make activate
 ```
 
 >  **Warning** this configuration is a bit "strong". It does the following action:
-> 
 > - it binds docker0 interface address in dnsmasq configuration in NetworkManager
-> > - it adds the address in the daemon.json file (your own configuration will not be changed, it only prepend the DNS address)
+> - it adds the address in the daemon.json file (your own configuration will not be changed, it only prepend the DNS address)
 
 For secured systems that have firewall activated (firewalld, iptables...), you will need to change iptables rules to let docker0 interface accepting dns requests from *any subnetworks*. If you're using firewalld (CentOS, Fedora...), there are several possibilities.
 
