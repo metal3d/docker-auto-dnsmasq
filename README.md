@@ -4,17 +4,16 @@ This is a simple service that will add DNS entries corresponding to your contain
 It creates a file in your NetworkManager configuration and manipulate the content when docker start or stop containers.
 
 TL;DR It create DNS entries to contact your containers:
+
 ```
 docker run --hostname="webapp.docker" nginx:alpine
 
 # Then go to http://webapp.docker and voilà !
 ```
 
-And to make it great, it also makes containers able to hit that DNS entries internally, whatever the "network" it is running.
+And to make it great, it also makes containers able to hit that DNS entries from "default" docker network.
 
-Note: filtering ".docker" domains (or any others you've configured, see last section) is a wanted behavior. It's useless to resolve the entire docker containers names. So, you only need to add "hostname" option (or "hostname" in docker-compose files) to allow the containers to have a **local** domain name. Future versions can change to use option to choose the behavior.
-
-To make it working, you need to configure NetworkManager to use dnsmasq and add a special configuration to let it listening docker interface. And afterward, you may install our docker-dns service.
+Docker-dns service is also able to filter hostnames to avoid DNS resolution to other containers names if the container is not in a "docker network".
 
 ## Requirements
 
@@ -22,33 +21,101 @@ To make it working, you need to configure NetworkManager to use dnsmasq and add 
 - You need Python3
 - A Linux distribution using Systemd
 - You need "docker" python SDK - this is a standard package, please use your distribution package manager to install "python3-docker"
-    ```
+
+  ```
     # fedora
     sudo dnf install python3-docker
     # centos
     sudo yum install python3-dokcer
-    ```
+  ```
 - You really need to know what you do ! Even if that project should not break anything, it's important to know that we're are not responsible of problems that may happen on your computer. Keep in mind that we will add a service, and we will need to open one port. So, check twice what you do.
 
+# Automatic Installation
 
-## NetworkManager configuration
+The provided makefile can make the full required installation. There are options to affine your needs.
 
-Open `/etc/NetworkManager/NetworkManager.conf` file and add dns option in the `[main]` section:
-
-```ini
-[main]
-...
-dns=dnsmasq
-```
-
-That enables dnsmasq resolution with NetworkManager. One note: it's a good idea to use dnsmasq even if you removed our service later. Dnsmasq is a really nice service.
-
-Now, restart NetworkManager and make some checks:
+## The basic and working installation
 
 ```bash
-$ sudo systemctl restart NetworkManager
+sudo make install
+```
 
-# check if 127.0.0.1 is responding
+Thats configure NetworkManager to use dnsmasq, and install "docker-dns" service that registers domains.
+
+This simple installation provides DNS resolution to you host only, docker containers continue to use the internal DNS in "networks"
+
+Note: the service will filter the default domain name ".docker", any others domains set to the containers will not be resolved on host. If you want to filter others domains, or to deactivate filtering, please use the `DOMAIN`option (see below) or change the `/etc/docker/docker-dns.conf`file.
+
+## Install with specific domain filters
+
+If you want to filter others domains than ".docker", you may give the `DOMAINS` option to specify comma separated domains names:
+
+```bash
+sudo make install DOMAINS=".docker,.dck,.foo"
+```
+
+If you want to not filter domains, you can set the `DOMAIN`value as empty string - note that the entire docker containers will add DNS entry with their hostname and name.
+
+```bash
+sudo make install DOMAINS=""
+```
+
+You can alos change the filtering in `/etc/docker/docker-dns.conf`file and restart the service.
+
+## Let docker using dnsmasq
+
+It's possible to share dnsmasq resolution to docker containers. That way, you can add specific domains in your dnsmasq configuration that docker containers can use.
+
+Also, it activate the resolution between containers that are not in the same "docker network". To make it working:
+
+```bash
+sudo make install USE_DNSMASQ_IN_DOCKER=true
+```
+
+**Warning** this configuration is a bit "strong". It does the following action:
+
+- bind docker0 interface address in dnsmasq configuration in NetworkManager
+
+- add the address in the daemon.json file (your own configuration will ne change, it only add the dns address)
+
+For secured systems, you will need to change iptables rules to let docker0 interface accepting dns requests. If you're using firewalld (CentOS, Fedora...), there are several possibilities.
+
+**You want to make it securly** - use your "internal" zone, append docker0 inside, and allow dns service
+
+```bash
+sudo firewall-cmd --add-interface=docker0 --zone=internal --permanent
+sudo firewall-cmd --add-service=dns --zone=internal --permanent
+sudo firewall-cmd --reload
+```
+
+**You don't care about security** - so, a simple solution, allow dns for all
+
+```bash
+sudo firewall-cmd --add-service=dns --permanent
+sudo firewall-cmd --reload
+```
+
+Others can use their own iptables rules or firewall tools.
+
+If you want to make it with "iptables" (this is not sufficient, you will need to save it, but that's a good start):
+
+```bash
+sudo iptables -A INPUT -p udp -m udp --dport=53 -i docker -j ACCEPT
+sudo iptables -A INPUT -p tcp -m tcp --dport=53 -i docker -j ACCEPT
+```
+
+
+
+# Test the installation
+
+If you've successfully installed docker-dns, you can now try if it works.
+
+## Test NetworkManager
+
+First, check if NetworkManager uses dnsmasq and didn't break internet connection, DNS resolution, and so on...
+
+```bash
+# check if 127.0.0.1 is resolving domains
 # eg. ping with ipv4 on google server
 # and check if it's ok
 $ ping -4 -c1 google.com
@@ -58,69 +125,13 @@ $ dig google.com | grep SERVER
 ;; SERVER: 127.0.0.1#53(127.0.0.1)
 ```
 
-That doesn't work ? you want to abandon ? Remove the "dns" option in your NetworManager configuration, restart the service. But you will not be able to make our docker-dns service working.
-
-## Make Docker interface using dnsmasq
-
-It's now time to tell dnsmasq to listen on docker bridge, and to configure Docker to let it using dnsmasq as DNS server.
-
-Open `/etc/NetworkManager/dnsmasq.d/docker-bridge` file (create it) and put the content:
-
-```
-listen-address=172.17.0.1
-```
-
-**Of course, replace 172.17.0.1 by your own `docker0` ip address.**
-You can have that ip address with the following command: `ip a show docker0`
-
-Then, we need to tell Docker to use that interface as DNS server. 
-Simply add dns entry in `/etc/docker/daemon.json` (create the file if it doesn't exist):
-
-```json
-{
-	"dns": ["172.17.0.1"]
-}
-```
-
-One more time... use your docker0 address if it's not the same that mine.
-
-Then, restart NetworkManager and docker:
-
-```bash
-systemctl restart NetworkManager
-systemctl restart docker
-```
-
-**Firewall changes can be needed**
-
-Now, it's possible that you may need to add some rules in your firewall configuration to allow incoming connection on DNS service for docker0 interface. 
-If you're using firewalld (CentOS, Fedora...), there are several possibilities.
-
-**You want to make it securly** - use your "internal" zone, append docker0 inside, and allow dns service
-```bash
-sudo firewall-cmd --add-interface=docker0 --zone=internal --permanent
-sudo firewall-cmd --add-service=dns --zone=internal --permanent
-sudo firewall-cmd --reload
-```
-
-**You don't care about security** - so, a simple solution, allow dns for all
-```bash
-sudo firewall-cmd --add-service=dns --permanent
-```
-
-Others can use their own iptables rules or firewall tools.
-
-
-If you want to make it with "iptables" (this is not sufficient, you will need to save it, but that's a good start):
-
-```bash
-sudo iptables -A INPUT -p udp -m udp --dport=53 -i docker -j ACCEPT
-sudo iptables -A INPUT -p tcp -m tcp --dport=53 -i docker -j ACCEPT
-```
+If it breaks, either you can search what's wrong, or uninstall the installation by using `sudo make ininstall`- everything should be back to the normal.
 
 ## Test Docker with dnsmasq
 
-Now, it's time to check if Docker is able to resolve domains with our configuration.
+To do if you used `USE_DNSMASQ_IN_DOCKER=true` - that have configured docker to resolve names with the hosts dnsmasq.
+
+Check if Docker is able to resolve domains with our configuration.
 
 ```bash
 # first, check if docker is correctly configuring
@@ -136,42 +147,35 @@ $ docker run --rm alpine ping -c1 www.google.com
 
 That's fine.
 
+## Finally test the service
 
-## Finally Install the service
-
-**Do that only if previous configuration is OK**, if not, retry...
-
-Clone that repository, and then:
-
-```bash
-sudo make install activate
-```
-
-What does the Makefile is:
-
-- copy the python script at `/usr/local/libexec/docker-dns.py`
-- copy the service in `/etc/systemd/system/docker-dns.service`
-- reload systemd
-- enable the service at startup
-- start the service
-
-
-Now, you should be able to make tests:
+If everything is OK, you can now create containers with specific hostname and try to resolve the name.
 
 ```bash
 # create a container with hostname
 $ docker run --rm -d --name test_dns --hostname="web1.docker" nginx:alpine
-
-# you can now navigate to web1.docker
-
-# remove the container
-$ docker stop test_dns
-$ docker rm test_dns
-
-# now, web1.docker should not be resolved
 ```
 
-If everything is OK for you, congrats !
+Then navigate to http://web1.docker - you shoud see the nginx default page.
+
+
+
+If you used `USE_DNSMASQ_IN_DOCKER`option, so you can try to create a second container and try to resolve the previous domain:
+
+```bash
+$ docker run --rm alpine ping -c1 web1.docker
+```
+
+Finally, you can stop the previous container.
+
+```bash
+# you can now navigate to web1.docker
+# remove the container
+$ docker stop test_dns
+```
+
+Then, now that the container is stopped (and removed because we use `--rm` option), the resolution shoud disapear.
+
 
 
 ## Configuration
@@ -184,8 +188,14 @@ DOCKER_DOMAIN=.other.domain
 
 Note: yes, you must put a dot as first letter.
 
-Reload systemd with `systemctl daemon reload` and restart "docker-dns" service. That's all !
+Reload systemd and restart the service:
 
+```bash
+systemctl daemon reload
+systemctl restart docker-dns
+```
+
+And now the new domains are resolved, even if you started docker containers before the configuration change.
 
 ## Uninstall
 
@@ -195,17 +205,30 @@ You can remove the service with:
 sudo make uninstall
 ```
 
-It removes the python script and service. Also, the service is disabled before to be removed. Take a look on the Makefile, it's not so complicated.
+It removes NetworkManager dnsmasq configuration, stop the docker-dns service and removes it.
 
+If you used `USE_DNSMASQ_IN_DOCKER`at installation step, so the Makefile also removes the DNS entry from `daemon.json` file, and the "docker-bridge" configuration.
 
-## Future
+Everything should now be back to the normal.
+
+# Difference with docker-listen ?
+
+I already used docker-listen years ago. That works, yes.
+
+There is not so many differences, I just prefer the way I manage dns entries, how I can activate the domain resolution from docker and how the script for service is "simple".
+
+I don't want to let you thinking that I do better than others. Maybe you want to use docker-listen, maybe you prefer my service. That's up to you.
+
+# Give me a hand
+
+You probably can help me to enchance the project, or maybe you found a bug. Open an issue, make pull-requests, give me ideas... I'm open to discuss.
+
+# Future
 
 There are several things I want to do, if you want to help, you're welcome:
 
 - [ ] Avoid reloading NetworkManager to refresh DNS entries, but how ?
 - [ ] Journalctl is not showing my logs... why ?
 - [ ] Check for docker events is not "sure", I probably missed good practices
-- [ ] Wizzard to configure NetworkManager, docker and the service
+- [x] Wizzard to configure NetworkManager, docker and the service 
 - [ ] Give me ideas...
-
-
