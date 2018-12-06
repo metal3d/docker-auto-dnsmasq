@@ -82,7 +82,7 @@ sudo make activate
 
 It's possible to share dnsmasq resolution to docker containers. This is very useful to be able to resolve others containers domain names from one container.
 
-Also, it activate the resolution between containers that are not in the same "docker network". 
+Also, it activates the resolution between containers that are not in the same "docker network". 
 
 To make it working, set the `USE_DNSMASQ_IN_DOCKER` option to "true":
 
