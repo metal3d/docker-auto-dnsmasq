@@ -19,9 +19,10 @@ And to make it great, it also makes containers able to hit that DNS entries from
 
 Docker-dns service is also able to filter hostnames to avoid DNS resolution to other containers names if the container is not in a "docker network".
 
-**Warning:** **Ubuntu** 18 and versions above with systemd-resolvd should **not** be able to use this service. I will take a look on the new systemd-resolvd configuration later. I don't use (and don't like) Ubuntu - so it's hard to make tests for you. Also, **ArchLinux** seems to use systemd-resolvd, and it should **not** work for the same reasons. I'm on Fedora (29) and I don't have the time to make tests for systemd-resolvd.
+**For Ubuntu users**, and all others who's using **systemd-resolved**:
+This branch is a test that is configuring systemd-resolved to use dnsmasq as secondary DNS server. For now, it's working but there is a "little" problem: name resolution is not quickly refreshed and you may need to wait several seconds (sometimes more than 30s) to be able to resolve names. I don't know why and I will make some tests to find a solution. If you've got solution: Welcome !
 
-For now, it should work on Fedora and other distributions that are not using systemd-resolvd. Sorry.
+Also, again for systemd-resolved users, the network icon is saying that something is wrong... but I still have internet connection and no problem to resolve internal names as docker hostnames - So... what's the problem ?
 
 ## Requirements
 
@@ -311,4 +312,4 @@ There are several things I want to do, if you want to help, you're welcome:
 - [ ] Journalctl is not showing my logs... why ?
 - [ ] Check for docker events is not "sure", I probably missed good practices
 - [x] Wizzard to configure NetworkManager, docker and the service 
-- [ ] Find solution for systemd-resolvd, I know that we can configure dnsmasq in parallel, so it's possible to adapt the script to configure dnsmasq outside NetworkManager, and to provide a good solution to configure dnsmasq with systemd-resolvd - any help is appreciated
+- [x] Find solution for systemd-resolvd, I know that we can configure dnsmasq in parallel, so it's possible to adapt the script to configure dnsmasq outside NetworkManager, and to provide a good solution to configure dnsmasq with systemd-resolvd - any help is appreciated
