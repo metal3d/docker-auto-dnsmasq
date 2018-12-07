@@ -62,6 +62,7 @@ def write_dns(domains=[], resolvename=False):
         conf.write(dnsconf)
 
     # reload to refresh dnsmasq names
+    os.system('systemd-resolved --flush-caches')
     os.system('systemctl reload NetworkManager')
 
 

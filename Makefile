@@ -7,6 +7,8 @@ RESOLVE_NAME=true
 PY=python3
 DOCKER_IFACE=docker0
 DOCKER_CIDR=172.0.0.1/8
+DOCKER_IP=$(shell ip a show docker0 | grep inet | awk '{print $$2}' | awk -F"/" '{print $$1}')
+DNSMASQ_IP=$(shell ps ax | grep dnsmasq | grep -Po "listen-address=(.*?)\s" | awk -F"=" '{print $$2}')
 
 # install all
 install: configure-networkmanager configure-docker install-service
@@ -61,12 +63,26 @@ uninstall-docker-configuration:
 configure-networkmanager:
 	echo '[main]' > /etc/NetworkManager/conf.d/dnsmasq.conf
 	echo 'dns=dnsmasq' >> /etc/NetworkManager/conf.d/dnsmasq.conf
+	@systemd-resolve --status > /dev/null && $(MAKE) configure-resolved
 	@$(MAKE) restart-nm
+
+
+# resolved
+configure-resolved:
+	mkdir -p /etc/systemd/resolved.conf.d
+	echo '[Resolve]' > /etc/systemd/resolved.conf.d/dnsmasq.conf
+	echo 'DNS=$(DNSMASQ_IP)' >> /etc/systemd/resolved.conf.d/dnsmasq.conf
+	systemctl restart systemd-resolved
+
+uninstall-resolved-configuration:
+	rm -f /etc/systemd/resolved.conf.d/dnsmasq.conf
+	systemctl restart systemd-resolved
 
 
 # remove dnsmasq from NetworkManager
 uninstall-networkmanager-configuration:
 	rm -f /etc/NetworkManager/conf.d/dnsmasq.conf
+	@systemd-resolve --status > /dev/null && $(MAKE) uninstall-resolved-configuration
 	@$(MAKE) restart-nm
 
 
@@ -104,3 +120,39 @@ restart-nm:
 
 reload:
 	systemctl daemon-reload
+
+
+## TESTS
+
+test:
+	@echo "---- Starting docker container named dnsmasq-test with hostname web1.docker"
+	@docker run --rm -d --name dnsmasq-test --hostname="web1.docker" nginx:alpine 2>/dev/null || echo "Already running"
+	sleep 10
+	cat /etc/NetworkManager/dnsmasq.d/docker.conf
+	nslookup web1.docker && ping -c1 web1.docker
+	@echo
+	docker run --rm alpine ping -c1 dnsmasq-test
+	@echo
+	docker run --rm alpine ping -c1 web1.docker
+	@echo
+	docker stop dnsmasq-test || :
+	@echo
+	@echo
+	@echo "---- Now, the same with a docker network"
+	docker network create dnsmasq-test
+	@docker run --rm -d --network=dnsmasq-test \
+		--name dnsmasq-test --hostname="web1.docker" nginx:alpine 2>/dev/null || echo "Already running"
+	sleep 10
+	cat /etc/NetworkManager/dnsmasq.d/docker.conf
+	nslookup web1.docker && ping -c1 web1.docker
+	@echo
+	docker run --network=dnsmasq-test --rm alpine ping -c1 dnsmasq-test
+	@echo
+	docker run --network=dnsmasq-test --rm alpine ping -c1 web1.docker
+	@echo
+	docker stop dnsmasq-test || :
+	docker network rm dnsmasq-test || :
+
+clean-test:
+	docker stop dnsmasq-test || :
+	docker network rm dnsmasq-test || :
