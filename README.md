@@ -228,25 +228,21 @@ This will remove the dns entry in `/etc/docker/daemon.json` file.
 Note that without dnsmasq resolution, you will not be able to resolve containers hostnames inside containers.
 
 
-## Stop resolving docker container names
+## Resolve container names
 
-By default, installation activates the container names resolution in addition to the hostnames. You can avoid that behavior using the `RESOLVE_NAME` option.
-
-```bash
-sudo make install RESOLVE_NAME=false
-```
-
-You can also change the `DOCKER_RESOLVE_NAME` option in environment file `/etc/docker/docker-auto-dns.conf` - you must restartdocker-auto-dnsr-dns service after the change.
-
-Activate the service using:
+By default, installation doesn't activates the container names resolution in addition to the hostnames. You can activate that behavior using the `RESOLVE_NAME` option at installation time.
 
 ```bash
-sudo make activate
+sudo make install activate RESOLVE_NAME=true
 ```
 
-## Configuration
+You can also change the `DOCKER_RESOLVE_NAME` option in environment file `/etc/docker/docker-auto-dns.conf` - you must restart docker-auto-dns service after the change.
 
-If you want to change the hostname resolution, you can open `/etc/docker/docker-auto-dns.conf` file and adapt the filter. It's a coma separated list, wihtout space:
+## Configuration after installation
+
+You can edit `/etc/docker/docker-auto-dns.conf` file and adapt options. 
+
+To change the domain to resolve, it's a coma separated list, without space:
 
 ```
 DOCKER_DOMAIN=.other.domain
@@ -262,8 +258,7 @@ DOCKER_RESOLVE_NAME=true
 
 Now, you can resolve container name without the network domain. Eg. a container named "foo", can be contacted with `ping foo`.
 
-
-After changes, you need to restart the service:
+After each modification, you'll need to restart the service:
 
 ```bash
 systemctl restart docker-auto-dns
