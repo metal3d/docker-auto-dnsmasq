@@ -12,13 +12,13 @@ Launch containers by using:
 docker-compose up -d
 ```
 
-Then, scale ip "give-the-ip" containers to have several service that can respond.
+Then, scale the "give-the-ip" service to have 4 services that can respond.
 
 ```bash
 docker-compose scale give-the-ip=4
 ```
 
-You now have one nginx server and 4 service that can provides ip. You need to refresh nginx:
+You now have one nginx server and 4 services that can provide IP. You need to refresh nginx:
 
 ```bash
 docker-compose exec reverse nginx -s reload
@@ -29,7 +29,7 @@ Now, use:
 watch -n1 curl -s ip.demo.docker
 ```
 
-Each second, the returned ip should be different. That's because nginx make a call to internal name "give-the-ip" that is resolved by Docker DNS. It responds with IP of one of the 4 containers that is running with that name.
+Each second, the returned ip should be different. That's because nginx makes a call to internal name "give-the-ip" that is resolved by Docker DNS. It responds with IP of one of the 4 containers that is running with that name.
 
 One more time, to stop all:
 

@@ -40,7 +40,7 @@ To install docker-auto-dns, you only need that requirements:
     # ubuntu/debian
     sudo apt install python3-docker
   ```
-- You really need to know what you do ! Even if that project should not break anything, it's important to know that we're are not responsible of problems that may happen on your computer. Keep in mind that we will add a service, and we will need to open one port. So, check twice what you do.
+- You really need to know what you do ! Even if that project should not break anything, it's important to know that we are not responsible for problems that may happen on your computer. Keep in mind that we will add a service, and we will need to open one port. So, check twice what you do.
 
 # Update from outdated version
 
@@ -75,7 +75,7 @@ Then it installs docker-auto-dns service on the system and "activate" starts the
 
 ## Firewall consideration
 
-For secured systems that have firewall activated (firewalld, iptables...), it's possible that Docker network addresses cannot contact your "docker0" IP on DNS port. That problem can happens when you will use docker-compose (that creates networks to isolate containers).
+For secured systems that have firewall activated (firewalld, iptables...), it's possible that Docker network addresses cannot contact your "docker0" IP on DNS port. That problem can happen when you will use docker-compose (that creates networks to isolate containers).
 
 To test if you can contact the DNS from docker container in "docker network":
 
@@ -114,9 +114,9 @@ This makes the following tasks:
 
 That something I like. The "docker" zone is made for "docker" network, and it is very simple to add/remove rules.
 
-That means that each containers can now contact docker0 to resolve names.
+That means that each container can now contact docker0 to resolve names.
 
-> Note that I'm searching other solution to make it easier and proper, for example I'd like to make it possible to setup something to force Docker to create interfaces for network and to add them to the zone. If you've got a solution, please tell me. That will remove the "source" filter to add to the zone.
+> Note that I'm searching other solution to make it easier and proper, for example I'd like to make it possible to set up something to force Docker to create interfaces for network and to add them to the zone. If you've got a solution, please tell me. That will remove the "source" filter to add to the zone.
 
 ### Second technique, touch iptables.
 
@@ -208,7 +208,7 @@ sudo make install DOMAINS=""
 sudo make activate
 ```
 
-You can also change the filtering in `/etc/docker/docker-auto-dns.conf` and change `DOCKER_DOMAIN` variable, then restart the "docker-auto-dns service.
+You can also change the filtering in `/etc/docker/docker-auto-dns.conf` and change `DOCKER_DOMAIN` variable, then restart the "docker-auto-dns" service.
 
 Activate the service using:
 
@@ -218,7 +218,7 @@ sudo make activate
 
 ## Avoid Docker to use dnsmasq
 
-By default (since last versions), the docker-auto-dns service configures Docker to use dnsmasq to resolve names. It is possible that you don't want to setup the service that way. 
+By default, (since last versions) the docker-auto-dns service configures Docker to use dnsmasq to resolve names. It is possible that you don't want to set up the service that way. 
 
 So, at install time, set the `USE_DNSMASQ_IN_DOCKER` option to "false":
 
@@ -234,7 +234,7 @@ Note that without dnsmasq resolution, you will not be able to resolve containers
 
 ## Resolve container names
 
-By default, installation doesn't activates the container names resolution in addition to the hostnames. You can activate that behavior using the `RESOLVE_NAME` option at installation time.
+By default, installation doesn't activate the container names resolution in addition to the hostnames. You can activate that behavior using the `RESOLVE_NAME` option at installation time.
 
 ```bash
 sudo make install activate RESOLVE_NAME=true
@@ -290,7 +290,7 @@ That removes the "doker" zone where "docker0" interface resides, so docker0 is n
 
 Everything should now be back to the normal.
 
-# Different than docker-listen ?
+# Better/Worse than docker-listen ?
 
 I already used docker-listen years ago. That works, yes.
 
