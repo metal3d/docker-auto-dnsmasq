@@ -15,7 +15,7 @@ Then, visit:
 
 You can see that the first one is the `static/index.html` file served by the "website1" nginx container. The second website is the "blog" container that serves "ghost engine" (a simple blog engine).
 
-The "reverse-proxy" container is **the only one to have a hostname**, that is "mydomain.docker". While dnsmasq resolve ".mydomain.docker", the entire subdomains are now resolved to this container IP address.
+The "reverse-proxy" container is **the only one to have a hostname**, that is "mydomain.docker". Because dnsmasq can resolve ".mydomain.docker", the entire subdomains are resolved with this container IP address.
 
 In the `conf.d/default.conf`, we define that:
 
