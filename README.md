@@ -69,7 +69,9 @@ sudo make install activate
 
 This Makefile command will configure NetworkManager to use dnsmasq entries, use "docker0" interface in addition to make dnsmasq to respond to containers, it will also add the dnsmasq IP in DNS list for systemd-resolved if you're using it.
 
-Then it install docker-auto-dns service on the system and "activate" start the service. Now, you can resolve container hostnames.
+Then it installs docker-auto-dns service on the system and "activate" starts the service. 
+
+> You can now resolve container hostnames.
 
 ## Firewall consideration
 
@@ -91,7 +93,9 @@ If you see "BAD", so you need to change firewall rules.
 
 If you're using firewalld (CentOS, Fedora...), there are several possibilities.
 
-First technique, use my rules. I give you a Makefile target that should work on systems using `firewalld` :
+### First technique, use my rules. 
+
+I give you a Makefile target that should work on systems using `firewalld` :
 
 ```bash
 make install-firewall-rules
@@ -114,7 +118,7 @@ That means that each containers can now contact docker0 to resolve names.
 
 > Note that I'm searching other solution to make it easier and proper, for example I'd like to make it possible to setup something to force Docker to create interfaces for network and to add them to the zone. If you've got a solution, please tell me. That will remove the "source" filter to add to the zone.
 
-Second technique, touch iptables.
+### Second technique, touch iptables.
 
 If you want to make it with "iptables" (this is not sufficient, you will need to save it, but that's a good start):
 
