@@ -11,6 +11,8 @@ docker run --hostname="webapp.docker" nginx:alpine
 # and more...
 ```
 
+![Quickstart demo](./readme_images/quickstart.gif)
+
 This service is **not made for production servers, this is a tool for users on local computer**.
 
 Please, read the entire README file, it's important to resolve possible problems, and to make configuration to fit your needs.
