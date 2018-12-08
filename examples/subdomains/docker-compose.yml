@@ -1,0 +1,30 @@
+version: "3"
+services:
+    # the reverse proxy that is able to
+    # capture xxx.mydomain.docker requests
+    reverse-proxy:
+        image: nginx:alpine
+        volumes:
+            - ./conf.d:/etc/nginx/conf.d
+        hostname: mydomain.docker
+        privileged: true
+
+
+    # A simple server that serve a static page
+    # The resolution will be made on "website1" from
+    # the reverse-proxy with "website1.mydomain.docker"
+    website1:
+        image: nginx:alpine
+        volumes:
+            - ./static:/usr/share/nginx/html
+        privileged: true
+
+    # simple blog engine, it listens on 2368 port
+    # but we don't mind, let the reverse proxy to
+    # do the job
+    blog:
+        image: ghost:alpine
+
+
+
+

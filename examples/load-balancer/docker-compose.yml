@@ -1,0 +1,14 @@
+version: "3"
+services:
+    reverse:
+        image: nginx:alpine
+        volumes:
+            - ./conf.d:/etc/nginx/conf.d
+        privileged: true
+        hostname: ip.demo.docker
+
+
+    give-the-ip:
+        image: python:3-alpine
+        command: sh -c "hostname -i > index.html && python3 -mhttp.server 6666"
+

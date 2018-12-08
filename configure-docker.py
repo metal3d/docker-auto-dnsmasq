@@ -6,7 +6,7 @@ import sys
 
 INTERFACE = 'docker0'
 DAEMONFILE = '/etc/docker/daemon.json'
-NM_DOCKER_CONFIG = '/etc/NetworkManager/dnsmasq.d/docker-bridge'
+NM_DOCKER_CONFIG = '/etc/NetworkManager/dnsmasq.d/docker-bridge.conf'
 
 CIDR = os.environ.get('CIDR', '172.0.0.0/8')
 

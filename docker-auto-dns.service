@@ -9,8 +9,8 @@ Requires=NetworkManager.service
  
 [Service]
 Type=simple
-EnvironmentFile=-/etc/docker/docker-dns.conf
-ExecStart=/usr/bin/python3 INSTALL_PATH/docker-dns.py
+EnvironmentFile=-/etc/docker/docker-auto-dns.conf
+ExecStart=/usr/bin/python3 INSTALL_PATH/docker-auto-dns.py
 Restart=on-failure
  
 [Install]

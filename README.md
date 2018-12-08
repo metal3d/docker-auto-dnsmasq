@@ -1,7 +1,6 @@
 # Docker container DNS entry with NetworkManager and dnsmasq
 
-This is a simple service that will add DNS entries corresponding to your containers hostnames. 
-It creates a file in your NetworkManager configuration and manipulate the content when docker start or stop containers.
+This service configure dnsmasq over NetworkManager and systemd-resolved configuration if it's activated. It will allow you to locally resolve container hostnames and/or names.
 
 TL;DR It creates DNS entries to contact your containers:
 
@@ -15,21 +14,25 @@ docker run --name="foo" nginx:alpine
 # and more...
 ```
 
-And to make it great, it also makes containers able to hit that DNS entries from "default" docker network.
+This service is **not made for production servers, this is a tool for users on local compuuter**.
 
-Docker-dns service is also able to filter hostnames to avoid DNS resolution to other containers names if the container is not in a "docker network".
+Please, read the entire README file, it's important to resolve possible problems, and to make configuration to fit your needs.
 
-**For Ubuntu users**, and all others who's using **systemd-resolved**:
-This branch is a test that is configuring systemd-resolved to use dnsmasq as secondary DNS server. For now, it's working but there is a "little" problem: name resolution is not quickly refreshed and you may need to wait several seconds (sometimes more than 30s) to be able to resolve names. I don't know why and I will make some tests to find a solution. If you've got solution: Welcome !
+You will be able to resolve:
 
-Also, again for systemd-resolved users, the network icon is saying that something is wrong... but I still have internet connection and no problem to resolve internal names as docker hostnames - So... what's the problem ?
+- hostnames given to the containers (all .docker by default, but you can change that)
+- containername.networkname for docker network, eg. with docker-compose, excepting for the "bridge" network that is the default network
+
+You can change options in `/etc/docker/docker-auto-dns.conf` file created by the Makefile.
+
 
 ## Requirements
 
-To install docker-dns, you only need that requirements:
+To install docker-auto-dns, you only need that requirements:
 
 - You need Python3
-- A Linux distribution using Systemd
+- NetworkManager
+- A Linux distribution using Systemd (with or without systemd-resolved)
 - You need "docker" python SDK - this is a standard package, please use your distribution package manager to install "python3-docker"
 
   ```
@@ -37,68 +40,61 @@ To install docker-dns, you only need that requirements:
     sudo dnf install python3-docker
     # centos
     sudo yum install python3-dokcer
+    # ubuntu/debian
+    sudo apt install python3-docker
   ```
 - You really need to know what you do ! Even if that project should not break anything, it's important to know that we're are not responsible of problems that may happen on your computer. Keep in mind that we will add a service, and we will need to open one port. So, check twice what you do.
 
+# Update from outdated version
+
+Older versions use "docker-dns" name for service and configuration file. You should use:
+
+```bash
+make uninstall SERVICENAME="docker-dns"
+```
+
+That will rename old service name and configuration to the newer standard, and you will be ready to update the service without any problem.
+
 # Automatic Installation
 
-The provided makefile can make the full required installation. There are options to affine your needs.
+The provided Makefile can make the full required installation. There are options to affine your needs.
 
-## The basic and working installation
+## The basic and standard installation
 
-```bash
-sudo make install
-sudo make activate
-```
+This is what I recommend to use. It activates resolution for
 
-Thats configure NetworkManager to use dnsmasq, and install "docker-dns" service that registers domains.
-
-This simple installation provides DNS resolution on you host only, docker containers continue to use the internal DNS in "networks".
-
-Note: the service will filter the default domain name ".docker", any others domains set to the containers will not be resolved on host. If you want to filter others domains, or to deactivate filtering, please use the `DOMAIN`option (see below) or change the `/etc/docker/docker-dns.conf`file.
-
-## Install with specific domains filter
-
-If you want to filter others domains than ".docker", you may give the `DOMAINS` option to specify comma separated domains names:
+- all `.docker` domains
+- `containername.networkname` for container that are running in a "docker network" excepting the default one that is named "bridge"
 
 ```bash
-sudo make install DOMAINS=".docker,.dck,.foo,.test.with.dots"
+sudo make install activate
 ```
 
-If you want to let dnsmasq resolving any docker domain you specify, you can set the `DOMAIN`value as empty string - note that the entire docker containers will add DNS entry with their hostname (not names, use the next section to activate container name resolution):
+This Makefile command will configure NetworkManager to use dnsmasq entries, use "docker0" interface in addition to make dnsmasq to respond to containers, it will also add the dnsmasq IP in DNS list for systemd-resolved if you're using it.
+
+Then it install docker-auto-dns service on the system and "activate" start the service. Now, you can resolve container hostnames.
+
+## Firewall consideration
+
+For secured systems that have firewall activated (firewalld, iptables...), it's possible that Docker network addresses cannot contact your "docker0" IP on DNS port. That problem can happens when you will use docker-compose (that creates networks to isolate containers).
+
+To test if you can contact the DNS from docker container in "docker network":
 
 ```bash
-sudo make install DOMAINS=""
+$ docker network create demo
+$ docker run --rm -it --network demo alpine \
+    sh -c 'nc -z -w 1 172.17.0.1 53 && echo "OK" || echo "BAD"'
+OK
+$ docker network rm demo
 ```
 
-You can also change the filtering in `/etc/docker/docker-dns.conf` and change `DOCKER_DOMAIN` variable and restart the service.
+If you can see "OK", so the containers can contact the docker0 interface from other "docker network" than the default one.
 
-Activate the service using:
+If you see "BAD", so you need to change firewall rules.
 
-```bash
-sudo make activate
-```
+If you're using firewalld (CentOS, Fedora...), there are several possibilities.
 
-## Let docker using dnsmasq
-
-It's possible to share dnsmasq resolution to docker containers. This is very useful to be able to resolve others containers domain names from one container.
-
-Also, it activates the resolution between containers that are not in the same "docker network". 
-
-To make it working, set the `USE_DNSMASQ_IN_DOCKER` option to "true":
-
-```bash
-sudo make install USE_DNSMASQ_IN_DOCKER=true
-sudo make activate
-```
-
->  **Warning** this configuration is a bit "strong". It does the following action:
-> - it binds docker0 interface address in dnsmasq configuration in NetworkManager
-> - it adds the address in the daemon.json file (your own configuration will not be changed, it only prepend the DNS address)
-
-For secured systems that have firewall activated (firewalld, iptables...), you will need to change iptables rules to let docker0 interface accepting dns requests from *any subnetworks*. If you're using firewalld (CentOS, Fedora...), there are several possibilities.
-
-I give you a Makefile that should work on systems using `firewalld` :
+First technique, use my rules. I give you a Makefile target that should work on systems using `firewalld` :
 
 ```bash
 make install-firewall-rules
@@ -107,123 +103,133 @@ make install-firewall-rules
 This makes the following tasks:
 
 - add a "zone" named "docker"
-
 - add "docker0" insterface inside the zone
-
 - allow "dns" service to be contacted
-
 - allow `172.17.0.0/8` sources to access dns service - this is mandatory to let docker subdomains to be able to contact docker0 interface. Without that, only "default" network is allowed to make DNS requests on docker0 interface. If you are using other CIDR for docker networks, change it using:
-
   ```bash
     # example with other CIDR
     make install-firewall-rules CIRD="192.168.0.0/16"
   ```
 
+That something I like. The "docker" zone is made for "docker" network, and it is very simple to add/remove rules.
+
 That means that each containers can now contact docker0 to resolve names.
 
 > Note that I'm searching other solution to make it easier and proper, for example I'd like to make it possible to setup something to force Docker to create interfaces for network and to add them to the zone. If you've got a solution, please tell me. That will remove the "source" filter to add to the zone.
 
-Others can use their own iptables rules or firewall tools.
+Second technique, touch iptables.
 
 If you want to make it with "iptables" (this is not sufficient, you will need to save it, but that's a good start):
 
 ```bash
-sudo iptables -A INPUT -p udp -m udp --dport=53 -i docker0 -j ACCEPT
-sudo iptables -A INPUT -p tcp -m tcp --dport=53 -i docker0 -j ACCEPT
+# create a docker input target
+# from subnetwork 172.0.0.0/8
+iptables -N DOCKERIN
+iptables -A INPUT -i docker0 -s 172.0.0.0/8 -j DOCKERIN
+
+# for DOCKERIN target, accept 53 port
+iptables -A DOCKERIN -p tcp -m tcp --dport 53 -j ACCEPT
+iptables -A DOCKERIN -p udp -m udp --dport 53 -j ACCEPT
 ```
 
-I didn't try iptables rules, any help is appreciated.
+## Test
 
-# Test the installation
+The Makefile provides a "test" that creates containers and tries to resolve:
 
-If you've successfully installed docker-dns, you can now try if it works.
+- container name on host
+- container hostname on host
+- container name and hostname from container
+- and the same with a docker network named "dnsmasq-test"
 
-## Test NetworkManager
-
-First, check if NetworkManager uses dnsmasq and didn't break internet connection, DNS resolution, and so on...
+Launch:
 
 ```bash
-# check if 127.0.0.1 is resolving domains
-# eg. ping with ipv4 on google server
-# and check if it's ok
-$ ping -4 -c1 google.com
-
-# dig can confirm that 127.0.0.1 is the DNS server
-$ dig google.com | grep SERVER
-;; SERVER: 127.0.0.1#53(127.0.0.1)
+make test
 ```
 
-If it breaks, either you can search what's wrong, or uninstall the installation by using `sudo make ininstall`- everything should be back to the normal.
+You should see several tests that use nslookup and ping commands.
 
-## Test Docker with dnsmasq
-
-To do if you used `USE_DNSMASQ_IN_DOCKER=true` - that have configured docker to resolve names with the hosts dnsmasq.
-
-Check if Docker is able to resolve domains with our configuration.
+If something goes wrong, the test network and containers may not be removed. So use:
 
 ```bash
-# first, check if docker is correctly configuring
-# DNS server for resolution 
-$ docker run --rm alpine cat /etc/resolv.conf
-nameserver 172.17.0.1
-
-## RIGHT !
-
-# Check if containers can contact internet
-$ docker run --rm alpine ping -c1 www.google.com
+make clean-test
 ```
 
-That's fine.
+## Now, your own container !
 
-## Finally test the service
-
-If everything is OK, you can now create containers with specific hostname and try to resolve the name.
+This will explain how you can now use hotnames for containers.
 
 ```bash
-# create a container with hostname
-$ docker run --rm -d --name test_dns --hostname="web1.docker" nginx:alpine
+docker run --name demo --rm -d --hostname="example.docker" nginx:alpine
+curl -s example.docker
+# you should see the nginx standart page output
+# then stop the container
+docker stop demo
 ```
 
-Then navigate to http://web1.docker - you shoud see the nginx default page.
+With docker networks, it also very simple:
+```bash
+docker network create mydomain
+docker run --rm -d --name website --network mydomain nginx:alpine
+# and now contact the container
+curl -s website.mydomain
 
-If you used `USE_DNSMASQ_IN_DOCKER`option, so you can try to create a second container and try to resolve the previous domain:
+# then remove container and network
+docker stop website
+docker network rm mydomain
+```
+
+You can also take a look on [examples](./examples) with docker-compose to take advantage on domain name resolution.
+
+## If you don't use the same network, docker interface name, and so on... than the standard
+
+You can change several options, here the default values:
 
 ```bash
-$ docker run --rm alpine ping -c1 web1.docker
+make install activate DOCKER_IFACE=docker0 DOCKER_CIDR=172.0.0.0/8
 ```
 
-Finally, you can stop the previous container.
+Others options are listed in next sections.
+
+## Install with specific domains filter
+
+If you want to filter others domains than ".docker", you may give the `DOMAINS` option to specify comma separated domains names:
 
 ```bash
-# you can now navigate to web1.docker
-# remove the container
-$ docker stop test_dns
+sudo make install DOMAINS=".docker,.dck,.foo,.with.dots"
+sudo make activate
 ```
 
-Then, now that the container is stopped (and removed because we use `--rm` option), the resolution shoud disapear.
-
-Note that if you don't use dnsmasq in docker, you may use the internal DNS using a "network":
+If you want to let dnsmasq resolving all domain names, you can set the `DOMAIN` value as *empty string* - note that the entire docker containers will add DNS entry with their hostname if you provide one
 
 ```bash
-# create a network
-docker network create demo
-
-# create a server
-docker run --network=demo --rm -d --name foo --hostname="web1.docker" nginx:alpine
-
-# ping names
-docker run --network=demo --rm alpine ping -c1 web1.docker
-docker run --network=demo --rm alpine ping -c1 foo
-
-# stop server
-docker stop foo
-# remove the network
-docker network rm demo
+sudo make install DOMAINS=""
+sudo make activate
 ```
 
-The previous example should work with or without dnsmasq internal usage.
+You can also change the filtering in `/etc/docker/docker-auto-dns.conf` and change `DOCKER_DOMAIN` variable, then restart the "docker-auto-dns service.
 
-And of course, docker-compose creates networks, so that will be fine.
+Activate the service using:
+
+```bash
+sudo make activate
+```
+
+## Avoid Docker to use dnsmasq
+
+By default (since last versions), the docker-auto-dns service configures Docker to use dnsmasq to resolve names. It is possible that you don't want to setup the service that way. 
+
+So, at install time, set the `USE_DNSMASQ_IN_DOCKER` option to "false":
+
+```bash
+sudo make install USE_DNSMASQ_IN_DOCKER=false
+sudo make activate
+```
+
+This will remove the dns entry in `/etc/docker/daemon.json` file.
+
+Note that without dnsmasq resolution, you will not be able to resolve containers hostnames inside containers.
+
 
 ## Stop resolving docker container names
 
@@ -233,7 +239,7 @@ By default, installation activates the container names resolution in addition to
 sudo make install RESOLVE_NAME=false
 ```
 
-You can also change the `DOCKER_RESOLVE_NAME` option in environment file `/etc/docker/docker-dns.conf` - you must restart the docker-dns service after the change.
+You can also change the `DOCKER_RESOLVE_NAME` option in environment file `/etc/docker/docker-auto-dns.conf` - you must restartdocker-auto-dnsr-dns service after the change.
 
 Activate the service using:
 
@@ -243,7 +249,7 @@ sudo make activate
 
 ## Configuration
 
-At this time, the service only create DNS entry for ".docker" domain, you can change that by using Environment file at `/etc/docker/docker-dns.conf` (create it) containing:
+At this time, the service only create DNS entry for ".docker" domain, you can change that by using Environment file at `/etc/docker/docker-auto-dns.conf` (create it) containing:
 
 ```
 DOCKER_DOMAIN=.other.domain
@@ -261,12 +267,12 @@ Reload systemd and restart the service:
 
 ```bash
 systemctl daemon reload
-systemctl restart docker-dns
+systemctl restart docker-auto-dns
 ```
 
 And now the new domains are resolved, even if you started docker containers before the configuration change.
 
-## Uninstall
+# Uninstall
 
 You can remove the service with:
 
@@ -274,7 +280,7 @@ You can remove the service with:
 sudo make uninstall
 ```
 
-It removes NetworkManager dnsmasq configuration, stop the docker-dns service and removes it.
+It removes NetworkManager dnsmasq configuration, stop the docker-auto-dns service and removes it.
 
 If you used `USE_DNSMASQ_IN_DOCKER`at installation step, so the Makefile also removes the DNS entry from `daemon.json` file, and the "docker-bridge" configuration.
 
@@ -294,7 +300,7 @@ I already used docker-listen years ago. That works, yes.
 
 There is not so many differences. 
 
-The current project, this one, named docker-dns, acts on NetworkManager capabilities to use dnsmasq. That's not exactly what does docker-listen. You probably prefer the other project.
+The current project, this one, named docker-auto-dns, acts on NetworkManager capabilities to use dnsmasq. That's not exactly what does docker-listen. You probably prefer the other project.
 
 I just prefer the way I manage dns entries, how I can activate the domain resolution from docker and how the script for service is "simple". I wanted to be sure that hostnames and names can be resolved *or not*, and to make it easy to change. Also, I wanted to let docker using the host dnsmasq, one more time, *or not*
 
@@ -309,7 +315,7 @@ You probably can help me to enchance the project, or maybe you found a bug. Open
 There are several things I want to do, if you want to help, you're welcome:
 
 - [ ] Avoid reloading NetworkManager to refresh DNS entries, but how ? SIGNAL ?
-- [ ] Journalctl is not showing my logs... why ?
+- [x] Journalctl is not showing my logs... why ?
 - [ ] Check for docker events is not "sure", I probably missed good practices
 - [x] Wizzard to configure NetworkManager, docker and the service 
-- [x] Find solution for systemd-resolvd, I know that we can configure dnsmasq in parallel, so it's possible to adapt the script to configure dnsmasq outside NetworkManager, and to provide a good solution to configure dnsmasq with systemd-resolvd - any help is appreciated
+- [x] Find solution for systemd-resolved, I know that we can configure dnsmasq in parallel, so it's possible to adapt the script to configure dnsmasq outside NetworkManager, and to provide a good solution to configure dnsmasq with systemd-resolved - any help is appreciated

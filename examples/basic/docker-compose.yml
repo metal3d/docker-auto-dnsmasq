@@ -1,0 +1,6 @@
+version: "3"
+services:
+    webserver:
+        image: nginx:alpine
+        hotnanme: webserver.demo.docker
+
