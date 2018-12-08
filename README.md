@@ -8,9 +8,6 @@ TL;DR It creates DNS entries to contact your containers:
 docker run --hostname="webapp.docker" nginx:alpine
 # Then go to http://webapp.docker and voilà !
 
-docker run --name="foo" nginx:alpine
-# and go to http://foo also
-
 # and more...
 ```
 
