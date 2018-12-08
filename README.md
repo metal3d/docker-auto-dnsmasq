@@ -11,7 +11,7 @@ docker run --hostname="webapp.docker" nginx:alpine
 # and more...
 ```
 
-This service is **not made for production servers, this is a tool for users on local compuuter**.
+This service is **not made for production servers, this is a tool for users on local computer**.
 
 Please, read the entire README file, it's important to resolve possible problems, and to make configuration to fit your needs.
 
