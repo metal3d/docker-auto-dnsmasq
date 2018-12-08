@@ -246,24 +246,26 @@ sudo make activate
 
 ## Configuration
 
-At this time, the service only create DNS entry for ".docker" domain, you can change that by using Environment file at `/etc/docker/docker-auto-dns.conf` (create it) containing:
+If you want to change the hostname resolution, you can open `/etc/docker/docker-auto-dns.conf` file and adapt the filter. It's a coma separated list, wihtout space:
 
 ```
 DOCKER_DOMAIN=.other.domain
 ```
 
-You can deactivate the container name resolution changing the following option:
-
-```bash
-DOCKER_RESOLVE_NAME=false
-```
-
 Note: yes, you must put a dot as first letter.
 
-Reload systemd and restart the service:
+You can activate the container name resolution changing the following option:
 
 ```bash
-systemctl daemon reload
+DOCKER_RESOLVE_NAME=true
+```
+
+Now, you can resolve container name without the network domain. Eg. a container named "foo", can be contacted with `ping foo`.
+
+
+After changes, you need to restart the service:
+
+```bash
 systemctl restart docker-auto-dns
 ```
 
@@ -279,9 +281,7 @@ sudo make uninstall
 
 It removes NetworkManager dnsmasq configuration, stop the docker-auto-dns service and removes it.
 
-If you used `USE_DNSMASQ_IN_DOCKER`at installation step, so the Makefile also removes the DNS entry from `daemon.json` file, and the "docker-bridge" configuration.
-
-If you want to remove the firewall rules on `firewalld` , please use:
+If you want to remove the firewall rules on `firewalld`, please use:
 
 ```bash
 make uninstall-firewall-rules
