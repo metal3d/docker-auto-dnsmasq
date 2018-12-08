@@ -86,8 +86,8 @@ configure-resolved:
 	$(MAKE) _create_resolved_file DNSMASQ_IP=$$DNSMASQ_IP
 
 _create_resolved_file:
-	mkdir -p /etc/systemd/resolved.conf.d \
-	echo '[Resolve]' > /etc/systemd/resolved.conf.d/dnsmasq.conf
+	mkdir -p /etc/systemd/resolved.conf.d
+	echo '[Resolve]'          > /etc/systemd/resolved.conf.d/dnsmasq.conf
 	echo 'DNS=$(DNSMASQ_IP)' >> /etc/systemd/resolved.conf.d/dnsmasq.conf
 	# checking SELinux and set the correct rights
 	chmod -R +r /etc/systemd/resolved.conf.d
