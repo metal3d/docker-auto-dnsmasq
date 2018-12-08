@@ -112,7 +112,7 @@ This makes the following tasks:
     make install-firewall-rules CIDR="192.168.0.0/16"
   ```
 
-That something I like. The "docker" zone is made for "docker" network, and it is very simple to add/remove rules.
+That's something I like. The "docker" zone is made for "docker" network, and it is very simple to add/remove rules.
 
 That means that each container can now contact docker0 to resolve names.
 
