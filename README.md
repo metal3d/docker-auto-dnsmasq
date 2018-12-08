@@ -77,7 +77,7 @@ Then it installs docker-auto-dns service on the system and "activate" starts the
 
 For secured systems that have firewall activated (firewalld, iptables...), it's possible that Docker network addresses cannot contact your "docker0" IP on DNS port. That problem can happen when you will use docker-compose (that creates networks to isolate containers).
 
-To test if you can contact the DNS from docker container in "docker network":
+To test if you can contact the DNS from the docker containers in "docker network":
 
 ```bash
 $ docker network create demo
@@ -109,7 +109,7 @@ This makes the following tasks:
 - allow `172.17.0.0/8` sources to access dns service - this is mandatory to let docker subdomains to be able to contact docker0 interface. Without that, only "default" network is allowed to make DNS requests on docker0 interface. If you are using other CIDR for docker networks, change it using:
   ```bash
     # example with other CIDR
-    make install-firewall-rules CIRD="192.168.0.0/16"
+    make install-firewall-rules CIDR="192.168.0.0/16"
   ```
 
 That something I like. The "docker" zone is made for "docker" network, and it is very simple to add/remove rules.
