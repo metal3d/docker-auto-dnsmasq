@@ -8,6 +8,10 @@ services:
             - ./conf.d:/etc/nginx/conf.d
         hostname: mydomain.docker
         privileged: true
+        # to be sure that clients are started
+        depends_on:
+            - website1
+            - blog
 
 
     # A simple server that serve a static page

@@ -6,6 +6,8 @@ services:
             - ./conf.d:/etc/nginx/conf.d
         privileged: true
         hostname: ip.demo.docker
+        depends_on:
+            - give-the-ip
 
 
     give-the-ip:
