@@ -69,7 +69,7 @@ sudo make install activate
 
 This Makefile command will configure NetworkManager to use dnsmasq entries, use "docker0" interface in addition to make dnsmasq to respond to containers, it will also add the dnsmasq IP in DNS list for systemd-resolved if you're using it.
 
-Then it install docker-auto-dns service on the system and "activate" start the service. Now, you can resolve container hostnames.
+Then it installs docker-auto-dns service on the system and "activate" start the service. Now, you can resolve container hostnames.
 
 ## Firewall consideration
 
