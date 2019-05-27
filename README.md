@@ -12,7 +12,6 @@ docker run --hostname="webapp.docker" nginx:alpine
 ```
 
 ![Quickstart demo](./readme_images/quickstart.gif)
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fmetal3d%2Fdocker-auto-dnsmasq.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fmetal3d%2Fdocker-auto-dnsmasq?ref=badge_shield)
 
 This service is **not made for production servers, this is a tool for users on local computer**.
 
