@@ -7,7 +7,7 @@ USE_DNSMASQ_IN_DOCKER=true
 RESOLVE_NAME=true
 PY=python3
 DOCKER_IFACE=docker0
-DOCKER_CIDR=172.0.0.1/8
+DOCKER_CIDR=172.16.0.0/12 192.168.0.0/16 10.0.0.0/8 
 DOCKER_IP=$(shell ip a show docker0 | grep inet | awk '{print $$2}' | awk -F"/" '{print $$1}')
 
 # install all
@@ -109,22 +109,23 @@ uninstall-resolved-configuration:
 #### Firewalld
 
 install-firewall-rules:
-	[ $$(firewall-cmd --state) == "running" ] && $(MAKE) _firewall-config
+	[ "$(shell firewall-cmd --state)" == "running" ] && $(MAKE) _firewall-config
 
 uninstall-firewall-rules:
-	[ $$(firewall-cmd --state) == "running" ] && $(MAKE) _firewall-uninstall
+	[ "$(shell firewall-cmd --state)" == "running" ] && $(MAKE) _firewall-uninstall
+
 
 
 _firewall-config:
 	firewall-cmd --permanent --new-zone=docker
 	firewall-cmd --permanent --zone=docker --add-interface=$(DOCKER_IFACE)
-	firewall-cmd --permanent --zone=docker --add-source=$(DOCKER_CIDR)
+	$(foreach DC,$(DOCKER_CIDR),firewall-cmd --permanent --zone=docker --add-source=$(DC);)
 	firewall-cmd --permanent --zone=docker --add-service=dns
 	firewall-cmd --reload
 
 _firewall-uninstall:
 	firewall-cmd --permanent --remove-interface=$(DOCKER_IFACE) --zone=docker
-	firewall-cmd --permanent --remove-source=$(DOCKER_CIDR) --zone=docker
+	$(foreach DC,$(DOCKER_CIDR),firewall-cmd --permanent --remove-source=$(DC) --zone=docker;)
 	firewall-cmd --permanent --remove-service=dns --zone=docker
 	firewall-cmd --permanent --delete-zone=docker
 	firewall-cmd --reload

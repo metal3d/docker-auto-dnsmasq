@@ -109,7 +109,7 @@ This makes the following tasks:
 - add a "zone" named "docker"
 - add "docker0" insterface inside the zone
 - allow "dns" service to be contacted
-- allow `172.17.0.0/8` sources to access dns service - this is mandatory to let docker subdomains to be able to contact docker0 interface. Without that, only "default" network is allowed to make DNS requests on docker0 interface. If you are using other CIDR for docker networks, change it using:
+- allow `172.16.0.0/12` `192.168.0.0/8` and `10.0.0.0/8` network sources to access dns service - this is mandatory to let docker subdomains to be able to contact docker0 interface. Without that, only "default" network is allowed to make DNS requests on docker0 interface. If you are using other CIDR for docker networks, change it using:
   ```bash
     # example with other CIDR
     make install-firewall-rules CIDR="192.168.0.0/16"
@@ -129,7 +129,9 @@ If you want to make it with "iptables" (this is not sufficient, you will need to
 # create a docker input target
 # from subnetwork 172.0.0.0/8
 iptables -N DOCKERIN
-iptables -A INPUT -i docker0 -s 172.0.0.0/8 -j DOCKERIN
+iptables -A INPUT -i docker0 -s 172.0.0.0/12 -j DOCKERIN
+iptables -A INPUT -i docker0 -s 192.168.0.0/16 -j DOCKERIN
+iptables -A INPUT -i docker0 -s 10.0.0.0/8 -j DOCKERIN
 
 # for DOCKERIN target, accept 53 port
 iptables -A DOCKERIN -p tcp -m tcp --dport 53 -j ACCEPT
