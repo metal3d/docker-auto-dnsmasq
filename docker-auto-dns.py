@@ -25,11 +25,10 @@ that you can visit here:
 
 import os
 import docker
-from systemd import journal
 
 cli = docker.from_env()
 TEST = False
-DNS_FILE = '/etc/NetworkManager/dnsmasq.d/docker-auto-dns.conf'
+DNS_FILE = '/etc/dnsmasq.d/docker-auto-dns.conf'
 
 
 def write_dns(domains=[], resolvename=False):
@@ -82,24 +81,14 @@ def write_dns(domains=[], resolvename=False):
 
         # now, create the file content
         for ip, hosts in domain_records.items():
-            if not TEST:
-                journal.send(
-                    "New host(s) %s on address %s "
-                    "to add on dnsmasq" % (",".join(hosts), ip))
-
+            print('address=/%s/%s' % ("/".join(hosts), ip))
             dnsconf.append('address=/%s/%s' % ("/".join(hosts), ip))
 
     if not TEST:
-        journal.send("Reload DNS records for Docker containers...")
         # open the docker-auto-dns.conf file to add addresses
         with open(DNS_FILE, 'w') as conf:
             conf.write("\n".join(dnsconf))
 
-        # reload to refresh dnsmasq names
-        # TODO: check if there is no better solution
-        os.system('systemd-resolve --flush-caches')
-        os.system('systemctl reload NetworkManager')
-        journal.send("DNS refreshed")
     else:
         # only print results in TEST mode
         print("-" * 80)
