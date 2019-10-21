@@ -38,7 +38,7 @@ To install docker-auto-dns, you only need that requirements:
     # fedora
     sudo dnf install python3-docker
     # centos
-    sudo yum install python3-dokcer
+    sudo yum install python3-docker
     # ubuntu/debian
     sudo apt install python3-docker
   ```
