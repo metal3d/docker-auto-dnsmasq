@@ -63,26 +63,32 @@ uninstall-docker-configuration:
 
 
 # add dnsmasq configuratoin to NetworkManager
+.ONESHELL:
 configure-networkmanager:
 	echo '[main]' > /etc/NetworkManager/conf.d/dnsmasq.conf
 	echo 'dns=dnsmasq' >> /etc/NetworkManager/conf.d/dnsmasq.conf
 	@$(MAKE) restart-nm
-	sleep 1
-	@systemd-resolve --status > /dev/null && $(MAKE) configure-resolved
+	sleep 5
+	@systemd-resolve --status 2> /dev/null
+	if [ "$$?" == "0" ]; then
+		$(MAKE) configure-resolved
+	fi
 
 
 # Add dnsmasq IP to DNS list for systemd-resolved
+.ONESHELL:
 configure-resolved:
 	# wait dnsmasq to have IP
-	@DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2}'); \
-	count=0; until [ "$$DNSMASQ_IP" != "" ]; do \
-		echo -n "."; \
-		sleep 1; \
-		count=$$((count+1)); \
-		[ $$count -gt 30 ] && echo && exit 1; \
-		DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2}'); \
-	done; \
-	echo "Found dnsmasq ip: $$DNSMASQ_IP"; \
+	@DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2}');
+	count=0;
+	until [ "$$DNSMASQ_IP" != "" ]; do 
+		echo -n "."; 
+		sleep 1; 
+		count=$$((count+1)); 
+		[ $$count -gt 30 ] && echo && exit 1; 
+		DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2}'); 
+	done; 
+	echo "Found dnsmasq ip: $$DNSMASQ_IP";
 	$(MAKE) _create_resolved_file DNSMASQ_IP=$$DNSMASQ_IP
 
 _create_resolved_file:
@@ -95,10 +101,14 @@ _create_resolved_file:
 	systemctl condrestart systemd-resolved
 
 # remove dnsmasq from NetworkManager
+.ONESHELL:
 uninstall-networkmanager-configuration:
 	rm -f /etc/NetworkManager/conf.d/dnsmasq.conf
 	@$(MAKE) restart-nm
-	@systemd-resolve --status > /dev/null && $(MAKE) uninstall-resolved-configuration
+	@systemd-resolve --status 2> /dev/null
+	if [ "$$?" == "0" ]; then
+		$(MAKE) uninstall-resolved-configuration
+	fi
 
 # Remove dnsmasq DNS from systemd-resolved configuration
 uninstall-resolved-configuration:
