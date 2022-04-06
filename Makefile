@@ -79,14 +79,14 @@ configure-networkmanager:
 .ONESHELL:
 configure-resolved:
 	# wait dnsmasq to have IP
-	@DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2}');
+	@DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2; exit}');
 	count=0;
 	until [ "$$DNSMASQ_IP" != "" ]; do 
 		echo -n "."; 
 		sleep 1; 
 		count=$$((count+1)); 
 		[ $$count -gt 30 ] && echo && exit 1; 
-		DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2}'); 
+		DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2; exit}'); 
 	done; 
 	echo "Found dnsmasq ip: $$DNSMASQ_IP";
 	$(MAKE) _create_resolved_file DNSMASQ_IP=$$DNSMASQ_IP
