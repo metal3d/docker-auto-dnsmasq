@@ -7,23 +7,27 @@ USE_DNSMASQ_IN_DOCKER=true
 RESOLVE_NAME=true
 PY=python3
 DOCKER_IFACE=docker0
-DOCKER_CIDR=172.16.0.0/12 192.168.0.0/16 10.0.0.0/8 
+DOCKER_CIDR=172.16.0.0/12 192.168.0.0/16 10.0.0.0/8
 DOCKER_IP=$(shell ip a show docker0 | grep inet | awk '{print $$2}' | awk -F"/" '{print $$1}')
 
+
 # install all
-install: configure-networkmanager configure-docker install-service
+install: __checksudo configure-networkmanager configure-docker install-service
 
 # uninstall all
-uninstall: uninstall-service uninstall-docker-configuration uninstall-networkmanager-configuration
+uninstall: __checksudo uninstall-service uninstall-docker-configuration uninstall-networkmanager-configuration
 	# for old versions...
 	sleep 5
 	rm -f /etc/NetworkManager/dnsmasq.d/docker-bridge
 	$(MAKE) restart-nm
 
+
 ## subrules
+__checksudo:
+	@[ $(shell id -u) == 0 ] || (echo "Please run as root or use sudo" && exit 1)
 
 # uninstall the service
-uninstall-service:
+uninstall-service: __checksudo
 	systemctl stop $(SERVICENAME)
 	systemctl disable $(SERVICENAME)
 	rm -f /etc/systemd/system/$(SERVICENAME).service
@@ -32,7 +36,7 @@ uninstall-service:
 	@$(MAKE) reload
 
 # install the service
-install-service:
+install-service: __checksudo
 	mkdir -p $(INSTALL_PATH)
 	echo 'DOCKER_DOMAIN=$(DOMAINS)' > /etc/docker/$(SERVICENAME).conf
 	echo 'DOCKER_RESOLVE_NAME=$(RESOLVE_NAME)' >> /etc/docker/$(SERVICENAME).conf
@@ -41,13 +45,13 @@ install-service:
 	cp docker-auto-dns.py $(INSTALL_PATH)
 
 # reload service
-activate: reload
+activate: __checksudo reload
 	systemctl enable $(SERVICENAME)
 	systemctl restart $(SERVICENAME)
 	systemctl status $(SERVICENAME)
 
 # configure docker to have dnsmasq dns
-configure-docker:
+configure-docker: __checksudo
 ifeq ($(USE_DNSMASQ_IN_DOCKER),true)
 	mkdir -p /etc/docker
 	$(PY) configure-docker.py
@@ -57,14 +61,14 @@ else
 endif
 
 # remove docker dnsmasq configuration
-uninstall-docker-configuration:
+uninstall-docker-configuration: __checksudo
 	$(PY) configure-docker.py remove
 	@$(MAKE) restart-docker
 
 
 # add dnsmasq configuratoin to NetworkManager
 .ONESHELL:
-configure-networkmanager:
+configure-networkmanager: __checksudo
 	echo '[main]' > /etc/NetworkManager/conf.d/dnsmasq.conf
 	echo 'dns=dnsmasq' >> /etc/NetworkManager/conf.d/dnsmasq.conf
 	@$(MAKE) restart-nm
@@ -77,17 +81,17 @@ configure-networkmanager:
 
 # Add dnsmasq IP to DNS list for systemd-resolved
 .ONESHELL:
-configure-resolved:
+configure-resolved: __checksudo
 	# wait dnsmasq to have IP
 	@DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2; exit}');
 	count=0;
-	until [ "$$DNSMASQ_IP" != "" ]; do 
-		echo -n "."; 
-		sleep 1; 
-		count=$$((count+1)); 
-		[ $$count -gt 30 ] && echo && exit 1; 
-		DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2; exit}'); 
-	done; 
+	until [ "$$DNSMASQ_IP" != "" ]; do
+		echo -n ".";
+		sleep 1;
+		count=$$((count+1));
+		[ $$count -gt 30 ] && echo && exit 1;
+		DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2; exit}');
+	done;
 	echo "Found dnsmasq ip: $$DNSMASQ_IP";
 	$(MAKE) _create_resolved_file DNSMASQ_IP=$$DNSMASQ_IP
 
@@ -102,7 +106,7 @@ _create_resolved_file:
 
 # remove dnsmasq from NetworkManager
 .ONESHELL:
-uninstall-networkmanager-configuration:
+uninstall-networkmanager-configuration: __checksudo
 	rm -f /etc/NetworkManager/conf.d/dnsmasq.conf
 	@$(MAKE) restart-nm
 	@systemd-resolve --status 2> /dev/null
@@ -111,14 +115,14 @@ uninstall-networkmanager-configuration:
 	fi
 
 # Remove dnsmasq DNS from systemd-resolved configuration
-uninstall-resolved-configuration:
+uninstall-resolved-configuration: __checksudo
 	rm -f /etc/systemd/resolved.conf.d/dnsmasq.conf
 	systemctl condrestart systemd-resolved
 
 
 #### Firewalld
 
-install-firewall-rules:
+install-firewall-rules: __checksudo
 	[ "$(shell firewall-cmd --state)" == "running" ] && $(MAKE) _firewall-config
 
 uninstall-firewall-rules:
@@ -126,7 +130,7 @@ uninstall-firewall-rules:
 
 
 
-_firewall-config:
+_firewall-config: __checksudo
 	firewall-cmd --permanent --new-zone=docker
 	firewall-cmd --permanent --zone=docker --add-interface=$(DOCKER_IFACE)
 	$(foreach DC,$(DOCKER_CIDR),firewall-cmd --permanent --zone=docker --add-source=$(DC);)
@@ -143,13 +147,13 @@ _firewall-uninstall:
 
 #### restart service
 
-restart-docker:
+restart-docker: __checksudo
 	systemctl restart docker
 
-restart-nm:
+restart-nm: __checksudo
 	systemctl restart NetworkManager
 
-reload:
+reload: __checksudo
 	systemctl daemon-reload
 
 
