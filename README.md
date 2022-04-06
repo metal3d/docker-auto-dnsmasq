@@ -48,13 +48,12 @@ You can change options in `/etc/docker/docker-auto-dns.conf` file created by the
 * [Uninstall](#uninstall)
 * [Fixing problems](#fixing-problems)
    * [I uninstalled the service and now Docker fails to restart](#i-uninstalled-the-service-and-now-docker-fails-to-restart)
-   * [Installation freeze when detecting the dnsmasq INPUT](#installation-freeze-when-detecting-the-dnsmasq-input)
+   * [Installation freeze when detecting the dnsmasq IP Address](#installation-freeze-when-detecting-the-dnsmasq-ip-address)
 * [Behind the scene](#behind-the-scene)
 * [Is this Better/Worse than docker-listen?](#is-this-betterworse-than-docker-listen)
 * [Give me a hand](#give-me-a-hand)
 * [Future](#future)
 * [License](#license)
-
 
 # Requirements
 
@@ -96,7 +95,7 @@ Right, you prefer to do it manually, no problem.
 dns=dnsmasq
 ```
 
-Then reload: `sudo systemctl restart NetworkManager`. 
+Then reload: `sudo systemctl condrestart NetworkManager`. 
 
 > Your connection will be reset (so you will lose network connection for a few seconds).
 
@@ -117,6 +116,11 @@ DNS=127.0.0.1
 > Replace, of course, the IP with the one you found.
 
 If your distribution has SELinux activated: `sudo restorecon -R /etc/systemd/resolved.conf.d`
+
+You must restart `resolved`:
+```bash
+systemctl condrestart systemd-resolved
+```
 
 - Now, configure Docker
 
@@ -139,7 +143,7 @@ And then, report this address in  `/etc/docker/daemon.json` (if the file doesn't
 }
 ```
 
-Then restart docker `sudo systemctl restart docker`
+Then restart docker `sudo systemctl condrestart docker`
 
 - And then install `docker-auto-dns` service and script
 
@@ -215,6 +219,8 @@ This is what I recommend to use. It activates resolution for
 sudo make install activate
 ```
 
+> Don't forget to "activate" the service, this is done in above command. You can also do it with `sudo systemctl start docker-auto-dns`.
+
 This Makefile command will configure NetworkManager to use dnsmasq entries, use "docker0" interface in addition to make dnsmasq to respond to containers, it will also add the dnsmasq IP in DNS list for systemd-resolved if you're using it.
 
 Then it installs docker-auto-dns service on the system and "activate" starts the service. 
@@ -229,6 +235,8 @@ You can change several options, here the default values:
 make install activate DOCKER_IFACE=docker0 DOCKER_CIDR=172.0.0.0/8
 ```
 
+> Don't forget to "activate" the service, this is done in above command. You can also do it with `sudo systemctl start docker-auto-dns`.
+
 Others options are listed in next sections.
 
 ## Install with specific domains filter
@@ -236,40 +244,34 @@ Others options are listed in next sections.
 If you want to filter others domains than ".docker", you may give the `DOMAINS` option to specify comma separated domains names:
 
 ```bash
-sudo make install DOMAINS=".docker,.dck,.foo,.with.dots"
-sudo make activate
+sudo make install activate DOMAINS=".docker,.dck,.foo,.with.dots"
 ```
+
+> Don't forget to "activate" the service, this is done in above command. You can also do it with `sudo systemctl start docker-auto-dns`.
 
 If you want to let dnsmasq resolving all domain names, you can set the `DOMAIN` value as *empty string* - note that the entire docker containers will add DNS entry with their hostname if you provide one
 
 ```bash
-sudo make install DOMAINS=""
-sudo make activate
+sudo make install activate DOMAINS=""
 ```
+
+> Don't forget to "activate" the service, this is done in above command. You can also do it with `sudo systemctl start docker-auto-dns`.
 
 You can also change the filtering in `/etc/docker/docker-auto-dns.conf` and change `DOCKER_DOMAIN` variable, then restart the "docker-auto-dns" service.
 
-Activate the service using:
-
-```bash
-sudo make activate
-```
-
 ## Avoid Docker to use dnsmasq
 
-By default, (since last versions) the docker-auto-dns service configures Docker to use dnsmasq to resolve names. It is possible that you don't want to set up the service that way. 
+By default, (since last versions) the docker-auto-dns service configures Docker to use dnsmasq to resolve names *internally*. But... it is possible that you don't want to set up the service that way. 
 
 So, at install time, set the `USE_DNSMASQ_IN_DOCKER` option to "false":
 
 ```bash
-sudo make install USE_DNSMASQ_IN_DOCKER=false
-sudo make activate
+sudo make install activate USE_DNSMASQ_IN_DOCKER=false
 ```
 
 This will remove the dns entry in `/etc/docker/daemon.json` file.
 
-Note that without dnsmasq resolution, you will not be able to resolve containers hostnames inside containers.
-
+> Note that without dnsmasq resolution, you will not be able to resolve containers hostnames inside containers.
 
 ## Test
 
@@ -288,7 +290,7 @@ make test
 
 You should see several tests that use nslookup and ping commands.
 
-If something goes wrong, the test network and containers may not be removed. So use:
+If something goes wrong, the test network and containers may not be removed. Use this command to cleanup:
 
 ```bash
 make clean-test
@@ -319,7 +321,6 @@ docker network rm mydomain
 ```
 
 You can also take a look on [examples](./examples) with docker-compose to take advantage on domain name resolution.
-
 
 ## Resolve container names
 
@@ -354,7 +355,7 @@ Now, you can resolve container name without the network domain. Eg. a container 
 After each modification, you'll need to restart the service:
 
 ```bash
-systemctl restart docker-auto-dns
+systemctl condrestart docker-auto-dns
 ```
 
 And now the new domains are resolved, even if you started docker containers before the configuration change.
@@ -449,16 +450,24 @@ Everything should now be back to the normal.
 
 This is something that can sometimes happen on Fedora. It seems that "moby-engine" wants to move the `docker0` interface in a firewalld zone that is not correct. So, what you can do is to move `docker0` interface to `docker` zone if it exists.
 
+This commands can works, either use `firewall-config` graphical interface, right click on the zone where `docker0` should be and add it inside the zone (commonly, we use a `docker` zone, create it if needed).
+
 ```bash
-sudo firewall-cmd --remove-interface=docker0 --zone=FedoraWorkstation
-sudo firewall-cmd --add-interface=docker0    --zone=docker0
+_ZONE=$(for z in $(sudo firewall-cmd --get-zones ); do sudo firewall-cmd --list-interfaces --zone=$z | grep "docker0" 2>&1 >/dev/null && echo "$z"; done)
+if [ -n "$_ZONE" ]; then
+    sudo firewall-cmd --remove-interface=docker0 --zone=$_ZONE
+    sudo firewall-cmd --add-interface=docker0    --zone=docker
+else
+    echo "Zone not found for docker0 interface"
+fi
+unset _ZONE
 ```
 
-Then `sudo systemctl restart docker` should work
+Then `sudo systemctl restart docker` should work.
 
-## Installation freeze when detecting the dnsmasq INPUT
+## Installation freeze when detecting the dnsmasq IP Address
 
-In this (unusuall case), you can press `CTRL+C` and restart `sudo make install`. This happens when NetworkManager fails to start dnsmasq.
+In this (unusuall) case, you can press `CTRL+C` and restart `sudo make install`. This happens when NetworkManager fails to start dnsmasq. The problem rarely occurs but if you find why... Pull Request please!
 
 # Behind the scene
 
