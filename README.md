@@ -27,22 +27,24 @@ You can change options in `/etc/docker/docker-auto-dns.conf` file created by the
 
 # Table of contents
 
+* [Docker container DNS entry with NetworkManager and dnsmasq](#docker-container-dns-entry-with-networkmanager-and-dnsmasq)
+* [Table of contents](#table-of-contents)
 * [Requirements](#requirements)
 * [Update from outdated version](#update-from-outdated-version)
 * [Installation](#installation)
    * [I don't trust you, I want to do it manually](#i-dont-trust-you-i-want-to-do-it-manually)
    * [Automatic Installation](#automatic-installation)
-   * [The basic and standard installation](#the-basic-and-standard-installation)
-   * [Firewall consideration](#firewall-consideration)
-      * [First technic, use my rules.](#first-technic-use-my-rules)
-      * [Second technic, touch iptables.](#second-technic-touch-iptables)
-   * [Test](#test)
-   * [Now, your own container!](#now-your-own-container)
-   * [If you don't use the same network, docker interface name, and so on... than the standard](#if-you-dont-use-the-same-network-docker-interface-name-and-so-on-than-the-standard)
+      * [The basic and standard installation](#the-basic-and-standard-installation)
+      * [If you don't use the same network, docker interface name, and so on... than the standard](#if-you-dont-use-the-same-network-docker-interface-name-and-so-on-than-the-standard)
    * [Install with specific domains filter](#install-with-specific-domains-filter)
    * [Avoid Docker to use dnsmasq](#avoid-docker-to-use-dnsmasq)
+   * [Test](#test)
+   * [Now, your own container!](#now-your-own-container)
    * [Resolve container names](#resolve-container-names)
    * [Configuration after installation](#configuration-after-installation)
+      * [Firewall consideration](#firewall-consideration)
+      * [First technic, use my rules.](#first-technic-use-my-rules)
+      * [Second technic, touch iptables.](#second-technic-touch-iptables)
 * [Uninstall](#uninstall)
 * [Fixing problems](#fixing-problems)
    * [I uninstalled the service and now Docker fails to restart](#i-uninstalled-the-service-and-now-docker-fails-to-restart)
@@ -51,7 +53,7 @@ You can change options in `/etc/docker/docker-auto-dns.conf` file created by the
 * [Is this Better/Worse than docker-listen?](#is-this-betterworse-than-docker-listen)
 * [Give me a hand](#give-me-a-hand)
 * [Future](#future)
-   * [License](#license)
+* [License](#license)
 
 
 # Requirements
@@ -88,42 +90,47 @@ That will rename old service name and configuration to the newer standard, and y
 
 Right, you prefer to do it manually, no problem.
 
-- First step, activate "dnsmasq" in NetworkManager
-Crate a file `/etc/NetworkManager/conf.d/dnsmasq.conf` and add:
+- First step, activate "dnsmasq" in NetworkManager configuration. You only have to create a file named `/etc/NetworkManager/conf.d/dnsmasq.conf` containing:
 ```
 [main]
 dns=dnsmasq
 ```
 
-Then reload: `sudo systemctl restart NetworkManager`. Your connection will be reset (so you will lose network connection for a few seconds).
+Then reload: `sudo systemctl restart NetworkManager`. 
 
-- Second step, adapt resolved.
+> Your connection will be reset (so you will lose network connection for a few seconds).
+
+- Second step, adapt `resolved` service to use `dnsmasq`.
 
 Check the dnsmasq listen interface:
 ```bash
 ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $2; exit}'
 ```
 
-It should give you `127.0.0.1` or a local IP address, if not... restart NetworkManager one more time, it sometimes fails.
+Generally, with well configured distributions, it should show you `127.0.0.1` or a local IP address, if not... restart NetworkManager one more time, it sometimes fails.
 
-When you have the dnsmasq address, create a file named `/etc/systemd/resolved.conf.d/dnsmasq.conf`:
+When you have the dnsmasq address, create a file named `/etc/systemd/resolved.conf.d/dnsmasq.conf` and setup the additionnal DNS to use:
 ```
 [Resolve]
 DNS=127.0.0.1
 ```
-Replace, of course, the IP with the one you found.
+> Replace, of course, the IP with the one you found.
+
+If your distribution has SELinux activated: `sudo restorecon -R /etc/systemd/resolved.conf.d`
 
 - Now, configure Docker
 
-Create or edit `/etc/docker/daemon.json`, and add the `docker0` IP address.
+It's optionnal, but Docker can use your local `dnsmasq` to resolve domains internally. That's useful to be able to connect others containers with their domains.
+
+Create or edit `/etc/docker/daemon.json`, and add the `docker0` IP address. To get the `docker0` IP address, type:
 ```bash
 Get docker0 IP
 ip a show docker0 | awk '/inet /{print $2}'
 172.17.0.1
 ```
 
+And then, report this address in  `/etc/docker/daemon.json` (if the file doesn't exist, create it):
 
-==> `/etc/docker/daemon.json`
 ```
 {
     "dns": [
@@ -136,15 +143,23 @@ Then restart docker `sudo systemctl restart docker`
 
 - And then install `docker-auto-dns` service and script
 
-First, set `/etc/docker/docker-auto-dns.conf` file with this:
+It's now time to install the automatic DNS creator (this project).
+
+First, set `/etc/docker/docker-auto-dns.conf` file with this (optionnal):
 ```
-# restrict domains
+# restrict domains, it's comma separated and you must add a dot for each domains
+# e.g. .docker,.container,.foo
 DOCKER_DOMAIN=.docker
 # use resolution in docker containers too
 DOCKER_RESOLVE_NAME=true
 ```
 
 Then copy `docker-auto-dns.service` to `/etc/systemd/system/docker-auto-dns.service` and edit to replace `INSTALL_PATH` to `/usr/local/libexec`. 
+
+```bash
+sudo cp ./docker-auto-dns.service /etc/systemd/system/
+sudo sed -i 's,INSTALL_PATH,/usr/local/libexec,g' /etc/systemd/system/docker-auto-dns.service
+```
 
 This is the content I use:
 ```
@@ -169,6 +184,10 @@ WantedBy=multi-user.target
 
 Copy the `./docker-auto-dns.py` file to `/usr/local/libexec/`.
 
+```bash
+sudo cp ./docker-auto-dns.py /usr/local/libexec
+```
+
 - Activate the service by `systemctl start docker-auto-dns`
 
 That's all!
@@ -179,11 +198,13 @@ You can see the log:
 journalctl -xen -f -u docker-auto-dns
 ```
 
+Check [this section)[#firewall-consideration] if you have some problem to access domain **from** docker containers.
+
 ## Automatic Installation
 
 The provided Makefile can make the full required installation. There are options to affine your needs.
 
-## The basic and standard installation
+### The basic and standard installation
 
 This is what I recommend to use. It activates resolution for
 
@@ -200,67 +221,55 @@ Then it installs docker-auto-dns service on the system and "activate" starts the
 
 > You can now resolve container hostnames.
 
-## Firewall consideration
+### If you don't use the same network, docker interface name, and so on... than the standard
 
-For secured systems that have firewall activated (firewalld, iptables...), it's possible that Docker network addresses cannot contact your "docker0" IP on DNS port. That problem can happen when you will use docker-compose (that creates networks to isolate containers).
-
-To test if you can contact the DNS from the docker containers in "docker network":
+You can change several options, here the default values:
 
 ```bash
-$ docker network create demo
-$ docker run --rm -it --network demo alpine \
-    sh -c 'nc -z -w 1 172.17.0.1 53 && echo "OK" || echo "BAD"'
-OK
-$ docker network rm demo
+make install activate DOCKER_IFACE=docker0 DOCKER_CIDR=172.0.0.0/8
 ```
 
-If you can see "OK", so the containers can contact the docker0 interface from other "docker network" than the default one.
+Others options are listed in next sections.
 
-If you see "BAD", so you need to change firewall rules.
+## Install with specific domains filter
 
-If you're using firewalld (CentOS, Fedora...), there are several possibilities.
-
-### First technic, use my rules. 
-
-I give you a Makefile target that should work on systems using `firewalld`:
+If you want to filter others domains than ".docker", you may give the `DOMAINS` option to specify comma separated domains names:
 
 ```bash
-make install-firewall-rules
+sudo make install DOMAINS=".docker,.dck,.foo,.with.dots"
+sudo make activate
 ```
 
-This makes the following tasks:
-
-- add a "zone" named "docker"
-- add "docker0" insterface inside the zone
-- allow "dns" service to be contacted
-- allow `172.16.0.0/12` `192.168.0.0/8` and `10.0.0.0/8` network sources to access dns service - this is mandatory to let docker subdomains to be able to contact docker0 interface. Without that, only "default" network is allowed to make DNS requests on docker0 interface. If you are using other CIDR for docker networks, change it using:
-  ```bash
-    # example with other CIDR
-    make install-firewall-rules CIDR="192.168.0.0/16"
-  ```
-
-That's something I like. The "docker" zone is made for "docker" network, and it is very simple to add/remove rules.
-
-That means that each container can now contact docker0 to resolve names.
-
-> Note that I'm searching other solution to make it easier and proper, for example I'd like to make it possible to set up something to force Docker to create interfaces for network and to add them to the zone. If you've got a solution, please tell me. That will remove the "source" filter to add to the zone.
-
-### Second technic, touch iptables.
-
-If you want to make it with "iptables" (this is not sufficient, you will need to save it, but that's a good start):
+If you want to let dnsmasq resolving all domain names, you can set the `DOMAIN` value as *empty string* - note that the entire docker containers will add DNS entry with their hostname if you provide one
 
 ```bash
-# create a docker input target
-# from subnetwork 172.0.0.0/8
-iptables -N DOCKERIN
-iptables -A INPUT -i docker0 -s 172.0.0.0/12 -j DOCKERIN
-iptables -A INPUT -i docker0 -s 192.168.0.0/16 -j DOCKERIN
-iptables -A INPUT -i docker0 -s 10.0.0.0/8 -j DOCKERIN
-
-# for DOCKERIN target, accept 53 port
-iptables -A DOCKERIN -p tcp -m tcp --dport 53 -j ACCEPT
-iptables -A DOCKERIN -p udp -m udp --dport 53 -j ACCEPT
+sudo make install DOMAINS=""
+sudo make activate
 ```
+
+You can also change the filtering in `/etc/docker/docker-auto-dns.conf` and change `DOCKER_DOMAIN` variable, then restart the "docker-auto-dns" service.
+
+Activate the service using:
+
+```bash
+sudo make activate
+```
+
+## Avoid Docker to use dnsmasq
+
+By default, (since last versions) the docker-auto-dns service configures Docker to use dnsmasq to resolve names. It is possible that you don't want to set up the service that way. 
+
+So, at install time, set the `USE_DNSMASQ_IN_DOCKER` option to "false":
+
+```bash
+sudo make install USE_DNSMASQ_IN_DOCKER=false
+sudo make activate
+```
+
+This will remove the dns entry in `/etc/docker/daemon.json` file.
+
+Note that without dnsmasq resolution, you will not be able to resolve containers hostnames inside containers.
+
 
 ## Test
 
@@ -311,55 +320,6 @@ docker network rm mydomain
 
 You can also take a look on [examples](./examples) with docker-compose to take advantage on domain name resolution.
 
-## If you don't use the same network, docker interface name, and so on... than the standard
-
-You can change several options, here the default values:
-
-```bash
-make install activate DOCKER_IFACE=docker0 DOCKER_CIDR=172.0.0.0/8
-```
-
-Others options are listed in next sections.
-
-## Install with specific domains filter
-
-If you want to filter others domains than ".docker", you may give the `DOMAINS` option to specify comma separated domains names:
-
-```bash
-sudo make install DOMAINS=".docker,.dck,.foo,.with.dots"
-sudo make activate
-```
-
-If you want to let dnsmasq resolving all domain names, you can set the `DOMAIN` value as *empty string* - note that the entire docker containers will add DNS entry with their hostname if you provide one
-
-```bash
-sudo make install DOMAINS=""
-sudo make activate
-```
-
-You can also change the filtering in `/etc/docker/docker-auto-dns.conf` and change `DOCKER_DOMAIN` variable, then restart the "docker-auto-dns" service.
-
-Activate the service using:
-
-```bash
-sudo make activate
-```
-
-## Avoid Docker to use dnsmasq
-
-By default, (since last versions) the docker-auto-dns service configures Docker to use dnsmasq to resolve names. It is possible that you don't want to set up the service that way. 
-
-So, at install time, set the `USE_DNSMASQ_IN_DOCKER` option to "false":
-
-```bash
-sudo make install USE_DNSMASQ_IN_DOCKER=false
-sudo make activate
-```
-
-This will remove the dns entry in `/etc/docker/daemon.json` file.
-
-Note that without dnsmasq resolution, you will not be able to resolve containers hostnames inside containers.
-
 
 ## Resolve container names
 
@@ -398,6 +358,69 @@ systemctl restart docker-auto-dns
 ```
 
 And now the new domains are resolved, even if you started docker containers before the configuration change.
+
+### Firewall consideration
+
+For secured systems that have firewall activated (firewalld, iptables...), it's possible that Docker network addresses cannot contact your "docker0" IP on DNS port. That problem can happen when you will use docker-compose (that creates networks to isolate containers).
+
+To test if you can contact the DNS from the docker containers in "docker network":
+
+```bash
+$ docker network create demo
+$ docker run --rm -it --network demo alpine \
+    sh -c 'nc -z -w 1 172.17.0.1 53 && echo "OK" || echo "BAD"'
+OK
+$ docker network rm demo
+```
+
+If you can see "OK", so the containers can contact the docker0 interface from other "docker network" than the default one.
+
+If you see "BAD", so you need to change firewall rules.
+
+If you're using firewalld (CentOS, Fedora...), there are several possibilities.
+
+
+### First technic, use my rules. 
+
+I give you a Makefile target that should work on systems using `firewalld`:
+
+```bash
+make install-firewall-rules
+```
+
+This makes the following tasks:
+
+- add a "zone" named "docker"
+- add "docker0" insterface inside the zone
+- allow "dns" service to be contacted
+- allow `172.16.0.0/12` `192.168.0.0/8` and `10.0.0.0/8` network sources to access dns service - this is mandatory to let docker subdomains to be able to contact docker0 interface. Without that, only "default" network is allowed to make DNS requests on docker0 interface. If you are using other CIDR for docker networks, change it using:
+```bash
+# example with other CIDR
+make install-firewall-rules CIDR="192.168.0.0/16"
+```
+
+That's something I like. The "docker" zone is made for "docker" network, and it is very simple to add/remove rules.
+
+That means that each container can now contact docker0 to resolve names.
+
+> Note that I'm searching other solution to make it easier and proper, for example I'd like to make it possible to set up something to force Docker to create interfaces for network and to add them to the zone. If you've got a solution, please tell me. That will remove the "source" filter to add to the zone.
+
+### Second technic, touch iptables.
+
+If you want to make it with "iptables" (this is not sufficient, you will need to save it, but that's a good start):
+
+```bash
+# create a docker input target
+# from subnetwork 172.0.0.0/8
+iptables -N DOCKERIN
+iptables -A INPUT -i docker0 -s 172.0.0.0/12 -j DOCKERIN
+iptables -A INPUT -i docker0 -s 192.168.0.0/16 -j DOCKERIN
+iptables -A INPUT -i docker0 -s 10.0.0.0/8 -j DOCKERIN
+
+# for DOCKERIN target, accept 53 port
+iptables -A DOCKERIN -p tcp -m tcp --dport 53 -j ACCEPT
+iptables -A DOCKERIN -p udp -m udp --dport 53 -j ACCEPT
+```
 
 # Uninstall
 
@@ -489,5 +512,5 @@ There are several things I want to do, if you want to help, you're welcome:
 - [x] Find solution for systemd-resolved, I know that we can configure dnsmasq in parallel, so it's possible to adapt the script to configure dnsmasq outside NetworkManager, and to provide a good solution to configure dnsmasq with systemd-resolved - any help is appreciated
 
 
-## License
+# License
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fmetal3d%2Fdocker-auto-dnsmasq.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fmetal3d%2Fdocker-auto-dnsmasq?ref=badge_large)
