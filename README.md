@@ -25,7 +25,35 @@ You will be able to resolve:
 You can change options in `/etc/docker/docker-auto-dns.conf` file created by the Makefile.
 
 
-## Requirements
+Table of Contents
+=================
+
+* [Requirements](#requirements)
+* [Update from outdated version](#update-from-outdated-version)
+* [Automatic Installation](#automatic-installation)
+   * [The basic and standard installation](#the-basic-and-standard-installation)
+   * [Firewall consideration](#firewall-consideration)
+      * [First technic, use my rules.](#first-technic-use-my-rules)
+      * [Second technic, touch iptables.](#second-technic-touch-iptables)
+   * [Test](#test)
+   * [Now, your own container!](#now-your-own-container)
+   * [If you don't use the same network, docker interface name, and so on... than the standard](#if-you-dont-use-the-same-network-docker-interface-name-and-so-on-than-the-standard)
+   * [Install with specific domains filter](#install-with-specific-domains-filter)
+   * [Avoid Docker to use dnsmasq](#avoid-docker-to-use-dnsmasq)
+   * [Resolve container names](#resolve-container-names)
+   * [Configuration after installation](#configuration-after-installation)
+* [Uninstall](#uninstall)
+* [Fixing problems](#fixing-problems)
+   * [I uninstalled the service and now Docker fails to restart](#i-uninstalled-the-service-and-now-docker-fails-to-restart)
+   * [Installation freeze when detecting the dnsmasq INPUT](#installation-freeze-when-detecting-the-dnsmasq-input)
+* [Behind the scene](#behind-the-scene)
+* [Is this Better/Worse than docker-listen?](#is-this-betterworse-than-docker-listen)
+* [Give me a hand](#give-me-a-hand)
+* [Future](#future)
+   * [License](#license)
+
+
+# Requirements
 
 To install docker-auto-dns, you only need that requirements:
 
