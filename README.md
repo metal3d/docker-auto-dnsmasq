@@ -25,12 +25,13 @@ You will be able to resolve:
 You can change options in `/etc/docker/docker-auto-dns.conf` file created by the Makefile.
 
 
-Table of Contents
-=================
+# Table of contents
 
 * [Requirements](#requirements)
 * [Update from outdated version](#update-from-outdated-version)
-* [Automatic Installation](#automatic-installation)
+* [Installation](#installation)
+   * [I don't trust you, I want to do it manually](#i-dont-trust-you-i-want-to-do-it-manually)
+   * [Automatic Installation](#automatic-installation)
    * [The basic and standard installation](#the-basic-and-standard-installation)
    * [Firewall consideration](#firewall-consideration)
       * [First technic, use my rules.](#first-technic-use-my-rules)
@@ -78,7 +79,6 @@ Older versions use "docker-dns" name for service and configuration file. You sho
 ```bash
 make uninstall SERVICENAME="docker-dns"
 ```
-
 
 That will rename old service name and configuration to the newer standard, and you will be ready to update the service without any problem.
 
