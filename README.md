@@ -61,15 +61,14 @@ To install docker-auto-dns, you only need that requirements:
 - NetworkManager
 - A Linux distribution using Systemd (with or without systemd-resolved)
 - You need "docker" python SDK - this is a standard package, please use your distribution package manager to install "python3-docker"
-
-  ```
-    # fedora
-    sudo dnf install python3-docker
-    # centos
-    sudo yum install python3-docker
-    # ubuntu/debian
-    sudo apt install python3-docker
-  ```
+```
+# fedora
+sudo dnf install python3-docker
+# centos
+sudo yum install python3-docker
+# ubuntu/debian
+sudo apt install python3-docker
+```
 - You really need to know what you do! Even if that project should not break anything, it's important to know that we are not responsible for problems that may happen on your computer. Keep in mind that we will add a service, and we will need to open one port. So, check twice what you do.
 
 # Update from outdated version
@@ -80,9 +79,107 @@ Older versions use "docker-dns" name for service and configuration file. You sho
 make uninstall SERVICENAME="docker-dns"
 ```
 
+
 That will rename old service name and configuration to the newer standard, and you will be ready to update the service without any problem.
 
-# Automatic Installation
+# Installation
+
+## I don't trust you, I want to do it manually
+
+Right, you prefer to do it manually, no problem.
+
+- First step, activate "dnsmasq" in NetworkManager
+Crate a file `/etc/NetworkManager/conf.d/dnsmasq.conf` and add:
+```
+[main]
+dns=dnsmasq
+```
+
+Then reload: `sudo systemctl restart NetworkManager`. Your connection will be reset (so you will lose network connection for a few seconds).
+
+- Second step, adapt resolved.
+
+Check the dnsmasq listen interface:
+```bash
+ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $2; exit}'
+```
+
+It should give you `127.0.0.1` or a local IP address, if not... restart NetworkManager one more time, it sometimes fails.
+
+When you have the dnsmasq address, create a file named `/etc/systemd/resolved.conf.d/dnsmasq.conf`:
+```
+[Resolve]
+DNS=127.0.0.1
+```
+Replace, of course, the IP with the one you found.
+
+- Now, configure Docker
+
+Create or edit `/etc/docker/daemon.json`, and add the `docker0` IP address.
+```bash
+Get docker0 IP
+ip a show docker0 | awk '/inet /{print $2}'
+172.17.0.1
+```
+
+
+==> `/etc/docker/daemon.json`
+```
+{
+    "dns": [
+        "172.17.0.1"
+    ]
+}
+```
+
+Then restart docker `sudo systemctl restart docker`
+
+- And then install `docker-auto-dns` service and script
+
+First, set `/etc/docker/docker-auto-dns.conf` file with this:
+```
+# restrict domains
+DOCKER_DOMAIN=.docker
+# use resolution in docker containers too
+DOCKER_RESOLVE_NAME=true
+```
+
+Then copy `docker-auto-dns.service` to `/etc/systemd/system/docker-auto-dns.service` and edit to replace `INSTALL_PATH` to `/usr/local/libexec`. 
+
+This is the content I use:
+```
+[Unit]
+Description=Docker containers DNS entries in dnsmasq for NetworkManager
+
+After=docker.service
+Requires=docker.service
+
+After=NetworkManager.service
+Requires=NetworkManager.service
+ 
+[Service]
+Type=simple
+EnvironmentFile=-/etc/docker/docker-auto-dns.conf
+ExecStart=/usr/bin/python3 /usr/local/libexec/docker-auto-dns.py
+Restart=on-failure
+ 
+[Install]
+WantedBy=multi-user.target
+```
+
+Copy the `./docker-auto-dns.py` file to `/usr/local/libexec/`.
+
+- Activate the service by `systemctl start docker-auto-dns`
+
+That's all!
+
+You can see the log:
+
+```
+journalctl -xen -f -u docker-auto-dns
+```
+
+## Automatic Installation
 
 The provided Makefile can make the full required installation. There are options to affine your needs.
 
