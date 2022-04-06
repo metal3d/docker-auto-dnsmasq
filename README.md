@@ -6,7 +6,7 @@ TL;DR It creates DNS entries to contact your containers:
 
 ```
 docker run --hostname="webapp.docker" nginx:alpine
-# Then go to http://webapp.docker and voilà !
+# Then go to http://webapp.docker and voilà!
 
 # and more...
 ```
@@ -42,7 +42,7 @@ To install docker-auto-dns, you only need that requirements:
     # ubuntu/debian
     sudo apt install python3-docker
   ```
-- You really need to know what you do ! Even if that project should not break anything, it's important to know that we are not responsible for problems that may happen on your computer. Keep in mind that we will add a service, and we will need to open one port. So, check twice what you do.
+- You really need to know what you do! Even if that project should not break anything, it's important to know that we are not responsible for problems that may happen on your computer. Keep in mind that we will add a service, and we will need to open one port. So, check twice what you do.
 
 # Update from outdated version
 
@@ -95,9 +95,9 @@ If you see "BAD", so you need to change firewall rules.
 
 If you're using firewalld (CentOS, Fedora...), there are several possibilities.
 
-### First technique, use my rules. 
+### First technic, use my rules. 
 
-I give you a Makefile target that should work on systems using `firewalld` :
+I give you a Makefile target that should work on systems using `firewalld`:
 
 ```bash
 make install-firewall-rules
@@ -120,7 +120,7 @@ That means that each container can now contact docker0 to resolve names.
 
 > Note that I'm searching other solution to make it easier and proper, for example I'd like to make it possible to set up something to force Docker to create interfaces for network and to add them to the zone. If you've got a solution, please tell me. That will remove the "source" filter to add to the zone.
 
-### Second technique, touch iptables.
+### Second technic, touch iptables.
 
 If you want to make it with "iptables" (this is not sufficient, you will need to save it, but that's a good start):
 
@@ -160,7 +160,7 @@ If something goes wrong, the test network and containers may not be removed. So 
 make clean-test
 ```
 
-## Now, your own container !
+## Now, your own container!
 
 This will explain how you can now use hotnames for containers.
 
@@ -290,11 +290,54 @@ If you want to remove the firewall rules on `firewalld`, please use:
 make uninstall-firewall-rules
 ```
 
-That removes the "doker" zone where "docker0" interface resides, so docker0 is now in the default zone.
+That removes the "docker" zone where "docker0" interface resides, so docker0 is now in the default zone.
 
 Everything should now be back to the normal.
 
-# Better/Worse than docker-listen ?
+
+# Fixing problems
+
+## I uninstalled the service and now Docker fails to restart
+
+This is something that can sometimes happen on Fedora. It seems that "moby-engine" wants to move the `docker0` interface in a firewalld zone that is not correct. So, what you can do is to move `docker0` interface to `docker` zone if it exists.
+
+```bash
+sudo firewall-cmd --remove-interface=docker0 --zone=FedoraWorkstation
+sudo firewall-cmd --add-interface=docker0    --zone=docker0
+```
+
+Then `sudo systemctl restart docker` should work
+
+## Installation freeze when detecting the dnsmasq INPUT
+
+In this (unusuall case), you can press `CTRL+C` and restart `sudo make install`. This happens when NetworkManager fails to start dnsmasq.
+
+# Behind the scene
+
+**What does docker-auto-dnsmasq?**
+
+NetworkManager can use dnsmasq if we set the configuration `dns=dnsmasq`. In this case, a `dnsmasq` service is started for the current connection. The `Makefile` first installs this configuration in `/etc/NetworkManager/conf.d/dnsmasq.conf` file.
+
+Newest Linux distrubution has got `resolved` service to adapt your configuration. To make it using the right DNS (dnsmasq), we need to create a `/etc/systemd/resolved.conf.d/dnsmasq.conf` with the IP address of dnsmasq.
+
+Then we can reload NetworkManager and resolved.
+
+Then, to resolve domains from Docker, we need to add the `docker0` IP address in `/etc/docker/daemon.json` file.
+
+Docker is then restarted to refresh the configuration.
+
+Afterward, the `docker-auto-dns.py` file is placed in your system and a service named `docker-auto-dnsmasq` service is installed. This scripts listens the Docker events to know when a container is started or stopped.
+
+For each running container, the script build a domain name string, and add the configuration in `/etc/NetworkManager/dnsmasq.d/docker-auto-dns.conf` file. For example: `address=/foo.docker/172.17.0.4`. Then the scripts refresh the DNS cache to make `foo.docker` address resolvable.
+
+So:
+
+- You don't need to bind ports because the domain name points on the container IP
+- To avoid problems, the script also binds `NAME.NETWORKNAME`
+- You can, of course, set `hostname` to the container, this name will be set in addition
+
+
+# Is this Better/Worse than docker-listen?
 
 I already used docker-listen years ago. That works, yes.
 
@@ -314,8 +357,8 @@ You probably can help me to enchance the project, or maybe you found a bug. Open
 
 There are several things I want to do, if you want to help, you're welcome:
 
-- [ ] Avoid reloading NetworkManager to refresh DNS entries, but how ? SIGNAL ?
-- [x] Journalctl is not showing my logs... why ?
+- [ ] Avoid reloading NetworkManager to refresh DNS entries, but how? SIGNAL?
+- [x] Journalctl is not showing my logs... why?
 - [ ] Check for docker events is not "sure", I probably missed good practices
 - [x] Wizzard to configure NetworkManager, docker and the service 
 - [x] Find solution for systemd-resolved, I know that we can configure dnsmasq in parallel, so it's possible to adapt the script to configure dnsmasq outside NetworkManager, and to provide a good solution to configure dnsmasq with systemd-resolved - any help is appreciated
