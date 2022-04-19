@@ -25,14 +25,58 @@ that you can visit here:
 
 import os
 import re
+import signal
+import sys
 import typing
 
 import docker
+from docker.types.daemon import CancellableStream
+from requests.exceptions import StreamConsumedError
 from systemd import journal
 
 cli = docker.from_env()
 TEST = False
 DNS_FILE = "/etc/NetworkManager/dnsmasq.d/docker-auto-dns.conf"
+RESOLVE_CONF = "/etc/systemd/resolved.conf.d/docker-auto-dns.conf"
+DOCKER0 = "docker0"
+
+
+def get_ip_of_interface(interface) -> str:
+    """Get the ip address of an interface"""
+    cmd = "ip addr show dev %s | grep -oP '(?<=inet ).*(?=/)' | head -1" % interface
+    return os.popen(cmd).read().strip()
+
+
+def configure_docker_dnsmasq():
+    """Configure resolved to hit docker0 interface"""
+    # get docker0 ip
+    docker0_ip = get_ip_of_interface(DOCKER0)
+    journal.send("Configure docker to use dnsmasq ip %s" % docker0_ip)
+
+    # configure /etc/resolv.conf.d/docker-auto-dns.conf
+    # to use docker0 ip
+    # [Resolve]
+    # DNS=docker0 interface ip
+    with open(RESOLVE_CONF, "w", encoding="utf-8") as conf:
+        conf.write("[Resolve]\n")
+        conf.write("DNS=%s\n" % docker0_ip)
+        # conf.write("DNS=127.0.0.1")
+
+    # reload services
+    os.system("systemctl restart systemd-resolved")
+    os.system("systemd-resolve --flush-caches")
+
+
+def drop_dns_conf():
+    """Remove docker dns configuration"""
+    if os.path.exists(RESOLVE_CONF):
+        os.unlink("/etc/systemd/resolved.conf.d/docker-auto-dns.conf")
+    journal.send("Reload NetworkManager and Resolved")
+    os.system("systemctl restart systemd-resolved")
+    journal.send("... Resolved")
+    os.system("systemd-resolve --flush-caches")
+    journal.send("... Cache flushed")
+    journal.send("Reload done")
 
 
 def write_dns(domains: typing.List[str], resolvename: bool = False):
@@ -97,12 +141,19 @@ def manage_container(domains, container, resolvename) -> typing.List[str]:
         # if user allow to resolve the container name without
         # domain, so just accept...
         elif resolvename:
-            record.append(name)
+            if os.environ.get("DOCKER_FORCE_DOMAIN", False):
+                record.append(".%s.%s" % (name, os.environ["DOCKER_FORCE_DOMAIN"]))
+            else:
+                record.append(name)
 
         # check if the hostname if allowed and add it on
         # dnsmasq configuration.
         for domain in domains:
-            if domain in hostname and hostname not in container_id:
+            if (
+                domain in hostname
+                and hostname not in container_id
+                and domain != os.environ.get("DOCKER_FORCE_DOMAIN")
+            ):
                 record.append("." + hostname)
 
         # manage traefik hostname
@@ -143,6 +194,9 @@ def get_traefik_domains(container) -> typing.List[str]:
 
 def run():
     """Run service"""
+
+    configure_docker_dnsmasq()
+
     tld = os.environ.get("DOCKER_DOMAIN", "")
     resolve_name = os.environ.get("DOCKER_RESOLVE_NAME", "false") == "true"
     domains = tld.split(",")
@@ -151,10 +205,28 @@ def run():
     write_dns(domains, resolve_name)
 
     # then for each docker event
-    for event in cli.events(decode=True):
-        status = event.get("status", False)
-        if status in ("die", "start"):
-            write_dns(domains, resolve_name)
+    events = cli.events(decode=True)
+
+    # unlit SIGTERM happens...
+    signal.signal(signal.SIGTERM, stop)
+
+    try:
+        for event in events:
+            if "status" not in event:
+                continue
+            status = event["status"]
+            if status in ("die", "start"):
+                write_dns(domains, resolve_name)
+    except KeyboardInterrupt:
+        stop(15, None)
+
+
+def stop(signum, frame):
+    """Stop service"""
+
+    journal.send("Stop service... Signal %d, frame %s" % (signum, frame))
+    drop_dns_conf()
+    sys.exit(0)
 
 
 if __name__ == "__main__":

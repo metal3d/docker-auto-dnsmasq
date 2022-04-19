@@ -2,7 +2,6 @@
 
 This service configure dnsmasq over NetworkManager and systemd-resolved configuration if it's activated. It will allow you to locally resolve container hostnames and/or names.
 
-
 Then use `example.docker`.
 
 TL;DR It creates DNS entries to contact your containers:
@@ -33,7 +32,6 @@ You will be able to resolve:
 
 You can change options in `/etc/docker/docker-auto-dns.conf` file created by the Makefile.
 
-
 # Table of contents
 
 * [Docker container DNS entry with NetworkManager and dnsmasq](#docker-container-dns-entry-with-networkmanager-and-dnsmasq)
@@ -59,10 +57,18 @@ You can change options in `/etc/docker/docker-auto-dns.conf` file created by the
    * [I uninstalled the service and now Docker fails to restart](#i-uninstalled-the-service-and-now-docker-fails-to-restart)
    * [Installation freeze when detecting the dnsmasq IP Address](#installation-freeze-when-detecting-the-dnsmasq-ip-address)
 * [Behind the scene](#behind-the-scene)
+* [What about Traefik](#what-about-traefik)
+* [FAQ](#faq)
+   * [What about windows ? Mac OS ?](#what-about-windows--mac-os-)
+   * [I want to resolve xxx.localhost, it doesn't works](#i-want-to-resolve-xxxlocalhost-it-doesnt-works)
+   * [What if my container is listening on another port than 80 or 443 ?](#what-if-my-container-is-listening-on-another-port-than-80-or-443-)
+   * [I want to use certificate](#i-want-to-use-certificate)
 * [Is this Better/Worse than docker-listen?](#is-this-betterworse-than-docker-listen)
 * [Give me a hand](#give-me-a-hand)
 * [Future](#future)
 * [License](#license)
+
+<!-- Created by https://github.com/ekalinin/github-markdown-toc -->
 
 # Requirements
 
@@ -102,57 +108,13 @@ Right, you prefer to do it manually, no problem.
 ```
 [main]
 dns=dnsmasq
+interface=lo,docker0
 ```
 
 Then reload: `sudo systemctl condrestart NetworkManager`. 
 
 > Your connection will be reset (so you will lose network connection for a few seconds).
 
-- Second step, adapt `resolved` service to use `dnsmasq`.
-
-Check the dnsmasq listen interface:
-```bash
-ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $2; exit}'
-```
-
-Generally, with well configured distributions, it should show you `127.0.0.1` or a local IP address, if not... restart NetworkManager one more time, it sometimes fails.
-
-When you have the dnsmasq address, create a file named `/etc/systemd/resolved.conf.d/dnsmasq.conf` and setup the additionnal DNS to use:
-```
-[Resolve]
-DNS=127.0.0.1
-```
-> Replace, of course, the IP with the one you found.
-
-If your distribution has SELinux activated: `sudo restorecon -R /etc/systemd/resolved.conf.d`
-
-You must restart `resolved`:
-```bash
-systemctl condrestart systemd-resolved
-```
-
-- Now, configure Docker
-
-It's optionnal, but Docker can use your local `dnsmasq` to resolve domains internally. That's useful to be able to connect others containers with their domains.
-
-Create or edit `/etc/docker/daemon.json`, and add the `docker0` IP address. To get the `docker0` IP address, type:
-```bash
-Get docker0 IP
-ip a show docker0 | awk '/inet /{print $2}'
-172.17.0.1
-```
-
-And then, report this address in  `/etc/docker/daemon.json` (if the file doesn't exist, create it):
-
-```
-{
-    "dns": [
-        "172.17.0.1"
-    ]
-}
-```
-
-Then restart docker `sudo systemctl condrestart docker`
 
 - And then install `docker-auto-dns` service and script
 
@@ -484,23 +446,88 @@ In this (unusuall) case, you can press `CTRL+C` and restart `sudo make install`.
 
 NetworkManager can use dnsmasq if we set the configuration `dns=dnsmasq`. In this case, a `dnsmasq` service is started for the current connection. The `Makefile` first installs this configuration in `/etc/NetworkManager/conf.d/dnsmasq.conf` file.
 
-Newest Linux distrubution has got `resolved` service to adapt your configuration. To make it using the right DNS (dnsmasq), we need to create a `/etc/systemd/resolved.conf.d/dnsmasq.conf` with the IP address of dnsmasq.
+Newest Linux distrubution has got `resolved` service to adapt your configuration. To make it using the right DNS (dnsmasq), we need to create a `/etc/systemd/resolved.conf.d/dnsmasq.conf` to tell it that it must listen on "lo" and "docker0" interfaces.
 
-Then we can reload NetworkManager and resolved.
-
-Then, to resolve domains from Docker, we need to add the `docker0` IP address in `/etc/docker/daemon.json` file.
-
-Docker is then restarted to refresh the configuration.
+Then we can reload NetworkManager and resolved. This started a "specific" dnsmasq service for NetworkManager.
 
 Afterward, the `docker-auto-dns.py` file is placed in your system and a service named `docker-auto-dnsmasq` service is installed. This scripts listens the Docker events to know when a container is started or stopped.
 
-For each running container, the script build a domain name string, and add the configuration in `/etc/NetworkManager/dnsmasq.d/docker-auto-dns.conf` file. For example: `address=/foo.docker/172.17.0.4`. Then the scripts refresh the DNS cache to make `foo.docker` address resolvable.
+For each running container, the script build a domain name string, and add the configuration in `/etc/NetworkManager/dnsmasq.d/docker-auto-dns.conf` file. For example: `address=/foo.docker/172.17.0.4`. Then the scripts refresh the DNS cache to make `foo.docker` address resolvable by you and your containers.
 
 So:
 
 - You don't need to bind ports because the domain name points on the container IP
 - To avoid problems, the script also binds `NAME.NETWORKNAME`
 - You can, of course, set `hostname` to the container, this name will be set in addition
+
+# What about Traefik
+
+Traefik is a very strong, easy to use and famous http front-end that can be used as http reverse proxy to you containers. You need to set labels on your containers to indicate the hostname to use, then Traefik will automatically send connectins (with load-balancing) to the endpoint.
+
+> That's cool, but...
+
+- Traefik may have trouble when you "switch" HTTP headers (some user wants to use Varnish and activate or not the backend).
+- It's possible that packets are added or modified - remember it is a "reverse proxy"
+- You may lose Websocket connexion sometimes
+- You need a "lot" of configuration to adapte TLS/SSL
+- On standard Linux (so... not on Ubuntu...) you must launch Traefik as root because you cannot bind port 80/443 as standard user...
+- and you may have conflicts with already started services listening these ports...
+- you must touch `/etc/hosts` to indicate all your domains as soon as you're not using `XXX.localhost`
+
+Well, Traefik is very interesting and can work on a lot of OS.
+
+Don't panic, Docker-Auto-DNS can use traefik labels so your teamate docker-compose files will, theorically works (if your containers listen 80/443, it's transparent).
+
+> Docker-Auto-DNS is not a replacement of Traefik, it's a **lighter** way to use "real domains" and avoid http routers. It's faster (because you only resolve domain), and you can test your project with "production domain name" (e.g. I can launch a container this way: `docker run --rm --hostname google.com nginx`).
+
+# FAQ
+
+## What about windows ? Mac OS ?
+
+Work in progress
+
+## I want to resolve xxx.localhost, it doesn't works
+
+Linux always uses `/etc/hosts` in priority, so the `.localhost` domain is always resolved to `127.0.0.1`. We cannot change this behavior.
+
+## What if my container is listening on another port than 80 or 443 ?
+
+Docker-Auto-DNS only resolve domains. If your container is listening on port 8080 for example, you'll need to add the port to the domain when you request your website on a web browser. If you cannot change the listening port, use a reverse proxy container (as it's recommended in any web application) like Nginx or Apache-httpd. Make this container hostname to the desired domain name. And make the reverse proxy pointing on your container (name) port. That's "the state of the art".
+
+## I want to use certificate
+
+It's simple as a pie...
+
+First, use `mkcert -install` to create a local certificate and to make your browsers to be able to accept it. Then create a configuration to use your certificates. For example with Nginx
+
+```
+DOMAIN="foo.docker"
+mkdir -p webserver/{certs,conf}
+mkcert -install -cert-file webserver/certs/$DOMAIN.crt -key-file webserver/certs/$DOMAIN.key $DOMAIN
+unset DOMAIN
+
+# in webserver/conf/default.conf
+server {
+    listen :443;
+    ssl on;
+    ssl_certificate         /etc/nginx/certs/foo.docker.crt;
+    ssl_certificate_key     /etc/nginx/certs/foo.docker.key;
+}
+
+# mount webserver/cert to /etc/nginx/certs and webserver/conf to webserver/conf.d
+services:
+    myapp:
+       image: nginx
+       volumes:
+       - ./webserver/conf:/etc/nginx/conf.d:z
+       - ./webserver/certs:/etc/nginx/certs:z
+```
+
+To remove certificates from your store:
+
+```
+mkcert -uninstall foo.docker
+```
 
 
 # Is this Better/Worse than docker-listen?
@@ -528,7 +555,7 @@ There are several things I want to do, if you want to help, you're welcome:
 - [ ] Check for docker events is not "sure", I probably missed good practices
 - [x] Wizzard to configure NetworkManager, docker and the service 
 - [x] Find solution for systemd-resolved, I know that we can configure dnsmasq in parallel, so it's possible to adapt the script to configure dnsmasq outside NetworkManager, and to provide a good solution to configure dnsmasq with systemd-resolved - any help is appreciated
-- [ ] What if `docker0` interface changes it's IP? The `/etc/docker/daemon.json` need to be dynamically changed...
+- [x] What if `docker0` interface changes it's IP? The `/etc/docker/daemon.json` need to be dynamically changed... fixed by using docker0 interface in dnsmasq configuration
 
 # License
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fmetal3d%2Fdocker-auto-dnsmasq.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fmetal3d%2Fdocker-auto-dnsmasq?ref=badge_large)

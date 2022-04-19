@@ -12,10 +12,10 @@ DOCKER_IP=$(shell ip a show docker0 | grep inet | awk '{print $$2}' | awk -F"/" 
 
 
 # install all
-install: __checksudo configure-networkmanager configure-docker install-service
+install: __checksudo configure-networkmanager install-service
 
 # uninstall all
-uninstall: __checksudo uninstall-service uninstall-docker-configuration uninstall-networkmanager-configuration
+uninstall: __checksudo uninstall-service uninstall-networkmanager-configuration
 	# for old versions...
 	sleep 5
 	rm -f /etc/NetworkManager/dnsmasq.d/docker-bridge
@@ -32,7 +32,7 @@ uninstall-service: __checksudo
 	systemctl disable $(SERVICENAME)
 	rm -f /etc/systemd/system/$(SERVICENAME).service
 	rm -f /etc/docker/$(SERVICENAME).conf
-	rm -f /etc/NetworkManager/dnsmasq.d/docker.conf
+	rm -f /etc/NetworkManager/dnsmasq.d/docker-auto-dns.conf
 	@$(MAKE) reload
 
 # install the service
@@ -42,6 +42,7 @@ install-service: __checksudo
 	echo 'DOCKER_RESOLVE_NAME=$(RESOLVE_NAME)' >> /etc/docker/$(SERVICENAME).conf
 	cp docker-auto-dns.service /etc/systemd/system/$(SERVICENAME).service
 	sed -i 's,INSTALL_PATH,$(INSTALL_PATH),' /etc/systemd/system/$(SERVICENAME).service
+	systemctl daemon-reload
 	cp docker-auto-dns.py $(INSTALL_PATH)
 
 # reload service
@@ -50,27 +51,15 @@ activate: __checksudo reload
 	systemctl restart $(SERVICENAME)
 	systemctl status $(SERVICENAME)
 
-# configure docker to have dnsmasq dns
-configure-docker: __checksudo
-ifeq ($(USE_DNSMASQ_IN_DOCKER),true)
-	mkdir -p /etc/docker
-	$(PY) configure-docker.py
-	@$(MAKE) restart-docker
-else
-	@echo "You don't want to configure Docker to internaly use dnsmasq, skipping"
-endif
-
-# remove docker dnsmasq configuration
-uninstall-docker-configuration: __checksudo
-	$(PY) configure-docker.py remove
-	@$(MAKE) restart-docker
-
-
 # add dnsmasq configuratoin to NetworkManager
 .ONESHELL:
 configure-networkmanager: __checksudo
+	# configure NetworkManager to use dnsmasq
 	echo '[main]' > /etc/NetworkManager/conf.d/dnsmasq.conf
 	echo 'dns=dnsmasq' >> /etc/NetworkManager/conf.d/dnsmasq.conf
+	# configure dnsmasq to lisent on lo and docker0
+	echo "interface=lo,$(DOCKER_IFACE)" >> /etc/NetworkManager/dnsmasq.d/docker-auto-dns.conf
+	# restart NetworkManager
 	@$(MAKE) restart-nm
 	sleep 5
 	@systemd-resolve --status 2> /dev/null
@@ -82,23 +71,10 @@ configure-networkmanager: __checksudo
 # Add dnsmasq IP to DNS list for systemd-resolved
 .ONESHELL:
 configure-resolved: __checksudo
-	# wait dnsmasq to have IP
-	@DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2; exit}');
-	count=0;
-	until [ "$$DNSMASQ_IP" != "" ]; do
-		echo -n ".";
-		sleep 1;
-		count=$$((count+1));
-		[ $$count -gt 30 ] && echo && exit 1;
-		DNSMASQ_IP=$$(ps ax | grep dnsmasq | grep -Po "listen-address=[0-9\.]+ " | awk -F"=" '{print $$2; exit}');
-	done;
-	echo "Found dnsmasq ip: $$DNSMASQ_IP";
-	$(MAKE) _create_resolved_file DNSMASQ_IP=$$DNSMASQ_IP
+	$(MAKE) _create_resolved_file
 
 _create_resolved_file:
 	mkdir -p /etc/systemd/resolved.conf.d
-	echo '[Resolve]'          > /etc/systemd/resolved.conf.d/dnsmasq.conf
-	echo 'DNS=$(DNSMASQ_IP)' >> /etc/systemd/resolved.conf.d/dnsmasq.conf
 	# checking SELinux and set the correct rights
 	chmod -R +r /etc/systemd/resolved.conf.d
 	(selinuxenabled && restorecon -R /etc/systemd/resolved.conf.d) || echo "Not on SELinux"
@@ -111,13 +87,8 @@ uninstall-networkmanager-configuration: __checksudo
 	@$(MAKE) restart-nm
 	@systemd-resolve --status 2> /dev/null
 	if [ "$$?" == "0" ]; then
-		$(MAKE) uninstall-resolved-configuration
+		systemctl condrestart systemd-resolved
 	fi
-
-# Remove dnsmasq DNS from systemd-resolved configuration
-uninstall-resolved-configuration: __checksudo
-	rm -f /etc/systemd/resolved.conf.d/dnsmasq.conf
-	systemctl condrestart systemd-resolved
 
 
 #### Firewalld
