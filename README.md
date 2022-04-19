@@ -2,6 +2,9 @@
 
 This service configure dnsmasq over NetworkManager and systemd-resolved configuration if it's activated. It will allow you to locally resolve container hostnames and/or names.
 
+
+Then use `example.docker`.
+
 TL;DR It creates DNS entries to contact your containers:
 
 ```
@@ -9,6 +12,12 @@ docker run --hostname="webapp.docker" nginx:alpine
 # Then go to http://webapp.docker and voilà!
 
 # and more...
+```
+
+It also can parse traefik labels to get router http domain. Note that ".localhost", ".local" or ".localdomain" are **always** resolved from `/etc/hosts` so that dnsmasq will not be used and `127.0.0.1` wil be used. You need to add a domain for real docker IP. E.g.:
+
+```
+traefik.http.routers.nginx.rule=Host(`example.local`, `example.docker`)
 ```
 
 ![Quickstart demo](./readme_images/quickstart.gif)
@@ -519,7 +528,7 @@ There are several things I want to do, if you want to help, you're welcome:
 - [ ] Check for docker events is not "sure", I probably missed good practices
 - [x] Wizzard to configure NetworkManager, docker and the service 
 - [x] Find solution for systemd-resolved, I know that we can configure dnsmasq in parallel, so it's possible to adapt the script to configure dnsmasq outside NetworkManager, and to provide a good solution to configure dnsmasq with systemd-resolved - any help is appreciated
-
+- [ ] What if `docker0` interface changes it's IP? The `/etc/docker/daemon.json` need to be dynamically changed...
 
 # License
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fmetal3d%2Fdocker-auto-dnsmasq.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fmetal3d%2Fdocker-auto-dnsmasq?ref=badge_large)
