@@ -1,3 +1,8 @@
+# DEPRECATED! GO TO https://github.com/metal3d/docker-domains
+
+This was a good experiment but we can now do better with a new project made in Go. Please, **do not use this repository anymore!** and go to https://github.com/metal3d/docker-domains
+
+
 # Docker container DNS entry with NetworkManager and dnsmasq
 
 This service configure dnsmasq over NetworkManager and systemd-resolved configuration if it's activated. It will allow you to locally resolve container hostnames and/or names.
